@@ -4,22 +4,13 @@ using Test
 mutable struct Vertex
     children::Dict{Char, Vertex}
     key::Union{String, Nothing}
-    suffix::Union{Vertex, Nothing}
-    # used for fsm's memoization
-    char::Union{Char, Nothing}
+    link::Union{Vertex, Nothing}
+    isroot::Bool
 
-    Vertex() = (
-        vx = new();
-        vx.children = Dict{Char, Vertex}();
-        vx.key = nothing;
-        vx.char = nothing;
-        vx.suffix = vx;
-    )
-
-    Vertex(char::Char) = new(Dict{Char, Vertex}(), nothing, nothing, char)
+    Vertex() = new(Dict{Char, Vertex}(), nothing, nothing, false)
 end
 
-Base.show(io::IO, vx::Vertex) = write(io, "Vertex{$(vx.key) -> $(keys(vx.children)) [$(vx.char)]}")
+Base.show(io::IO, vx::Vertex) = write(io, "Vertex{ $(keys(vx.children))$(if vx.key != nothing vx.key else "" end) }")
 # ■
 
 function add(vx::Vertex, key::String, idx::Int=1)
@@ -27,7 +18,7 @@ function add(vx::Vertex, key::String, idx::Int=1)
         vx.key = key
     else
         char = key[idx]
-        haskey(vx.children, char) || (vx.children[char] = Vertex(char))
+        haskey(vx.children, char) || (vx.children[char] = Vertex())
 
         add(vx.children[char], key, idx+1)
     end
@@ -35,10 +26,10 @@ end
 
 function build(vx::Vertex)
     for (char, child) in vx.children
-        if vx.suffix == vx
-            child.suffix = vx
-        else
-            child.suffix = search(vx.suffix, child.char)
+        if vx.isroot
+            child.link = vx
+        elseif vx.link != nothing
+            child.link = search(vx.link, char)
         end
     end
 
@@ -50,10 +41,10 @@ end
 function search(vx::Vertex, char::Char)
     if haskey(vx.children, char)
         vx.children[char]
-    elseif vx.suffix == vx
-        vx
+    elseif vx.link != nothing
+        search(vx.link, char)
     else
-        search(vx.suffix, char)
+        vx
     end
 end
 
@@ -70,6 +61,7 @@ end
 
 function match(dictionary::Vector{String}, source::String)
     fsm = Vertex()
+    fsm.isroot = true
 
     for line in dictionary
         add(fsm, line)
@@ -94,4 +86,20 @@ end
     @test length(matches) == 2
     @test "0" in matches
     @test "1" in matches
+end
+
+@testset "drosophila simple" begin
+    rna = open("drosophila_suzukii_rna.fa") do file
+        read(file, String)
+    end
+
+    @time matches = match(["TAAAAAACGT"], rna)
+    @test length(matches) == 39
+    @test "TAAAAAACGT" in matches
+
+    section = "ATGTTGGAACCGGCGGGGAACTTTTTAAATTTTAATGGCTTCAGCGAACCCGAAAAAGCACTCGAGGGTGCCATCATAAGAGAGATTGAAGATGGAGTTCGCTGTGAGCAATGTAAATCAGATTGCCCGGGTTTTGCAGCTCACGATTGGAGGAAAACCTGCCAATCCTGCAAATGTCCTCGCGAGGCACATGCCATATACCAGCAACAAACGACCAACGTCCACGAGCGACTCGGCTTCAAACTGGTTTCCCCGGCGGATTCCGGAGTGGAGGCGAGGGATCTGGGCTTCACGTGGGTTCCGCCCGGACTGCGAGCCTCGTCGCGGATCATCCGCTATTTCGAGCAGCTGCCCGATGAGGCGGTGCCCCGGTTGGGCAGCGAGGGAGCCTGCAGTCGGGAGCGCCAGATCTCGTACCAGCTGCCCAAACAGGACCTCTCGCTGGAGCACTGTAAGCACCTGGAGGTGCAGCACGAGTCCTCCTTCGAGGACTTTGTGACGGCGCGGAACGAAATCGCACTGGATATAGCCTACATCAAGGATGCACCCTACGATGAGCATTGTGCGCACTGTGATAACGAGATAGCTGCCGGCGAGCTGGTTGTAGCGGCGCCCAAGTTTGTGGAGAGCGTGATGTGGCACCCCAAGTGCTTCACCTGCAGCACCTGCAACCTGCTCCTGGTGGACCTCACCTACTGTGTCCACGACGACAAGGTCTACTGCGAGCGCCACTATGCGGAAATGCTGAAGCCCCGCTGCGCTGGCTGTGATGAGGTGAGTTCCCTCTAG"
+
+    @time matches = match([section], rna)
+    @test length(matches) == 1
+    @test section in matches
 end
