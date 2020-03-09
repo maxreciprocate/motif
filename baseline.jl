@@ -1,6 +1,8 @@
 import Base.match
 using Test
 
+FIXED = false
+
 mutable struct Vertex
     children::Dict{Char, Vertex}
     key::Union{String, Nothing}
@@ -72,6 +74,22 @@ function match(dictionary::Vector{String}, source::String)
     search(fsm, source)
 end
 
+function test_intersections(test_name::String ,str::String, to_match::Vector{String}, n_matches::Int)
+    @testset "$test_name" begin
+        
+    @time matches = match(to_match, str)
+    @test_broken length(matches) == n_matches  #for now broken
+
+    for p in to_match
+        if !FIXED @test_skip p in matches  #set FIXED = true when fixing this stuff
+        else @test p in matches 
+        end
+    end
+
+    end
+    
+end
+
 # function get_rna(file_name::String)
 
 
@@ -133,22 +151,53 @@ end
     @test length(matches) == 1
     @test pattern in matches
 
-    @time matches = match(to_match, "ATGTTGGACACTCGGCGGGGAACTTTTTAAA")
-    @test length(matches) == 0
+    @time matches = match(to_match, "ATGTTGGACACTCGGCGGACGACTGAGCACTGGAACTTTTTAAA")
+    @test length(matches) == 1
     # @test pattern in matches
 end
 
 @testset "find GAG, ACT, GTA" begin
-    to_match = ["GAG", "ACT", "GTA"]
-    @time matches = match(to_match, "ACGTACTGAGCACT")
-    @test length(matches) == 4
+    to_match = ["GACTG", "ACT"]
+    @time matches = match(to_match, "ACGACTGAGCACT")
+    @test_broken length(matches) == 3
     
     for p in to_match
         @test p in matches
     end
 end
 
-@testset "find " begin
+@testset "find some intersects" begin 
+    to_match = ["GACTG", "ACT",  "ACGACTGAGCACT"]
+
+    @time matches = match(to_match, "ATGTTGGACACTCGGCGGACGACTGAGCACTGGAACTTTTTAAA")
+    @test_broken length(matches) == 6
+    
+    for p in to_match
+        if p == "GACTG" @test_broken p in matches  # some stuff happening to GACTG - function can't match it
+        else @test p in matches end
+    end
+end
+
+test_intersections("intersection function", 
+                    "ATGTTGGACACTCGGCGGACGACTGAGCACTGGAACTTTTTAAA",
+                    ["ACGACTGAGCACT", "GAC", "ACG", "ACGACT", "ACT"], 10
+                    )
+
+test_intersections("more intersections",
+                    "GGCTCAAATTACACGTAAACTTAAGAATATTCG",
+                    ["TAC", "ACA", "TTACA", "ATA", "TAT", "ATAT"], 6
+                    )
+
+test_intersections("one more intersection test",
+                   "CAGTCATAAAATACATTCAAGTATCAATAAATAG",
+                  ["CAGTCATAA", "AGT", "CAT", "GTCAT"], 6
+                  )
+
+@testset "more intersections" begin
+    
+end
+
+@testset "find CAC GAG GCC" begin
     str = "CACCCACAATCAGGCGAAGAGCCCCGAC"
     to_match = ["CAC", "GAG", "GCC"]
     @time matches = match(to_match, str)
@@ -158,7 +207,6 @@ end
         @test p in matches
     end
 end
-
 
 @testset "another teest" begin
     rna = open("drosophila_suzukii_rna.fa") do file
