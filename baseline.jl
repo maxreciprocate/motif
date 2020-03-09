@@ -72,6 +72,9 @@ function match(dictionary::Vector{String}, source::String)
     search(fsm, source)
 end
 
+# function get_rna(file_name::String)
+
+
 # ■
 @testset "trivial" begin
     matches = match(["0"], "0")
@@ -102,4 +105,80 @@ end
     @time matches = match([section], rna)
     @test length(matches) == 1
     @test section in matches
+end
+
+@testset "find ACT" begin
+    pattern = "ACT"
+    to_match = [pattern]
+    @time matches = match(to_match, "ACGTACTGAGCACT")
+    @test length(matches) == 2
+    @test pattern in matches
+
+    @time matches = match(to_match, "ACGTAGTGAGCAC")
+    @test length(matches) == 0
+
+    @time matches = match(to_match, "ATGTTGGACACTCGGCGGGGAACTTTTTAAA")
+    @test length(matches) == 2
+    @test pattern in matches
+end
+
+@testset "find GAG" begin
+    pattern = "GAG"
+    to_match = [pattern]
+    @time matches = match(to_match, "ACGTACTGAGCACT")
+    @test length(matches) == 1
+    @test pattern in matches
+
+    @time matches = match(to_match, "ACGTAGTGAGCAC")
+    @test length(matches) == 1
+    @test pattern in matches
+
+    @time matches = match(to_match, "ATGTTGGACACTCGGCGGGGAACTTTTTAAA")
+    @test length(matches) == 0
+    # @test pattern in matches
+end
+
+@testset "find GAG, ACT, GTA" begin
+    to_match = ["GAG", "ACT", "GTA"]
+    @time matches = match(to_match, "ACGTACTGAGCACT")
+    @test length(matches) == 4
+    
+    for p in to_match
+        @test p in matches
+    end
+end
+
+@testset "find " begin
+    str = "CACCCACAATCAGGCGAAGAGCCCCGAC"
+    to_match = ["CAC", "GAG", "GCC"]
+    @time matches = match(to_match, str)
+    @test length(matches) == 4
+
+    for p in to_match
+        @test p in matches
+    end
+end
+
+
+@testset "another teest" begin
+    rna = open("drosophila_suzukii_rna.fa") do file
+        read(file, String)
+    end
+    to_match = "TTCAGGAGAAGCTATGCTCGGACCCAGAAGTGGTAAACAAGGACCACTGCCACAATCTGGCCAATGAGCACGAGGCGCTTCTGGAGGACTGGTTCACCCACAATCAGGCGAAGAGCCCCGACCTGCAATCGTGGCTTTGCATCGACCAGCTGGCCGTCTGTTGTCCGCCGAACACCTACGGAGCAGATTGCCAGCCCTGCACCGACTGCAGCGGAAACGGTAAATGCAAGGGAGCCGGTACTCGAAAAGGCAACGGAAAGTGCAAATGTGATCCTGGCTATGCGGGACCCAACTGCAATGAGTGTGGATCGATGCACTACGAGTCCTTCCGTGACGAGAA"
+    @time matches = match([to_match], rna)
+    # println("length = " , length(matches))
+    @test length(matches) == 2
+    @test to_match in matches
+end
+
+@testset "more complex test" begin
+    rna = open("drosophila_suzukii_rna.fa") do file
+        read(file, String)
+    end
+    section1 = "TTCAGGAGAAGCTATGCTCGGACCCAGAAGTGGTAAACAAGGACCACTGCCACAATCTGGCCAATGAGCACGAGGCGCTTCTGGAGGACTGGTTCACCCACAATCAGGCGAAGAGCCCCGACCTGCAATCGTGGCTTTGCATCGACCAGCTGGCCGTCTGTTGTCCGCCGAACACCTACGGAGCAGATTGCCAGCCCTGCACCGACTGCAGCGGAAACGGTAAATGCAAGGGAGCCGGTACTCGAAAAGGCAACGGAAAGTGCAAATGTGATCCTGGCTATGCGGGACCCAACTGCAATGAGTGTGGATCGATGCACTACGAGTCCTTCCGTGACGAGAA"
+    section2 = "ATGTTGGAACCGGCGGGGAACTTTTTAAATTTTAATGGCTTCAGCGAACCCGAAAAAGCACTCGAGGGTGCCATCATAAGAGAGATTGAAGATGGAGTTCGCTGTGAGCAATGTAAATCAGATTGCCCGGGTTTTGCAGCTCACGATTGGAGGAAAACCTGCCAATCCTGCAAATGTCCTCGCGAGGCACATGCCATATACCAGCAACAAACGACCAACGTCCACGAGCGACTCGGCTTCAAACTGGTTTCCCCGGCGGATTCCGGAGTGGAGGCGAGGGATCTGGGCTTCACGTGGGTTCCGCCCGGACTGCGAGCCTCGTCGCGGATCATCCGCTATTTCGAGCAGCTGCCCGATGAGGCGGTGCCCCGGTTGGGCAGCGAGGGAGCCTGCAGTCGGGAGCGCCAGATCTCGTACCAGCTGCCCAAACAGGACCTCTCGCTGGAGCACTGTAAGCACCTGGAGGTGCAGCACGAGTCCTCCTTCGAGGACTTTGTGACGGCGCGGAACGAAATCGCACTGGATATAGCCTACATCAAGGATGCACCCTACGATGAGCATTGTGCGCACTGTGATAACGAGATAGCTGCCGGCGAGCTGGTTGTAGCGGCGCCCAAGTTTGTGGAGAGCGTGATGTGGCACCCCAAGTGCTTCACCTGCAGCACCTGCAACCTGCTCCTGGTGGACCTCACCTACTGTGTCCACGACGACAAGGTCTACTGCGAGCGCCACTATGCGGAAATGCTGAAGCCCCGCTGCGCTGGCTGTGATGAGGTGAGTTCCCTCTAG"
+
+    @time matches = match([section1, section2], rna)
+    @test length(matches) == 3
+
 end
