@@ -1,232 +1,215 @@
 import Base.match
+using DataStructures
 using Test
-
-FIXED = false
 
 mutable struct Vertex
     children::Dict{Char, Vertex}
-    key::Union{String, Nothing}
-    link::Union{Vertex, Nothing}
+    string::Union{String, Nothing}
+    suffix::Union{Vertex, Nothing}
     isroot::Bool
 
     Vertex() = new(Dict{Char, Vertex}(), nothing, nothing, false)
 end
 
-Base.show(io::IO, vx::Vertex) = write(io, "Vertex{ $(keys(vx.children))$(if vx.key != nothing vx.key else "" end) }")
-# ■
+function Base.show(io::IO, vx::Vertex)
+    write(io, "Vertex{ $(keys(vx.children))$(if vx.string != nothing vx.string else "" end) }")
+end
 
-function add(vx::Vertex, key::String, idx::Int=1)
-    if idx > length(key)
-        vx.key = key
+function add!(vx::Vertex, string::String, idx::Int=1)
+    if idx > length(string)
+        vx.string = string
     else
-        char = key[idx]
+        char = string[idx]
         haskey(vx.children, char) || (vx.children[char] = Vertex())
 
-        add(vx.children[char], key, idx+1)
+        add!(vx.children[char], string, idx+1)
     end
 end
 
-function build(vx::Vertex)
-    for (char, child) in vx.children
-        if vx.isroot
-            child.link = vx
-        elseif vx.link != nothing
-            child.link = search(vx.link, char)
-        end
-    end
+function build!(root::Vertex)
+    queue = Queue{Vertex}()
+    enqueue!(queue, root)
 
-    for child in values(vx.children)
-        build(child)
+    for vx in queue, (char, child) in vx.children
+        child.suffix = if vx.isroot
+            vx
+        else
+            search(vx.suffix, char)
+        end
+
+        enqueue!(queue, child)
     end
 end
 
 function search(vx::Vertex, char::Char)
     if haskey(vx.children, char)
         vx.children[char]
-    elseif vx.link != nothing
-        search(vx.link, char)
-    else
+    elseif vx.isroot
         vx
+    else
+        search(vx.suffix, char)
     end
 end
 
+
 function search(vx::Vertex, key::String)
-    xs = []
+    out = []
 
     for char in key
         vx = search(vx, char)
-        vx.key == nothing || push!(xs, vx.key)
+        evx = vx
+
+        while true
+            if evx.string != nothing
+                push!(out, evx.string)
+            end
+
+            evx.isroot && break
+            evx = evx.suffix
+        end
     end
 
-    xs
+    out
 end
 
-function match(dictionary::Vector{String}, source::String)
+function match(source::String, strings::String...)
     fsm = Vertex()
     fsm.isroot = true
 
-    for line in dictionary
-        add(fsm, line)
+    for string in strings
+        add!(fsm, string)
     end
 
-    build(fsm)
+    build!(fsm)
 
     search(fsm, source)
 end
 
-function test_intersections(test_name::String ,str::String, to_match::Vector{String}, n_matches::Int)
-    @testset "$test_name" begin
-        
-    @time matches = match(to_match, str)
-    @test_broken length(matches) == n_matches  #for now broken
+@testset "trivial, single matches" begin
+    matches = match("0", "0")
+    @test length(matches) == 1
+    @test "0" in matches
+
+    matches = match("10", "1")
+    @test length(matches) == 1
+    @test "1" in matches
+
+    matches = match("10111", "1")
+    @test length(matches) == 4
+    @test "1" in matches
+end
+
+@testset "matching multiple single-char strings" begin
+    matches = match("10001", "0", "1", "3")
+    @test length(matches) == 5
+    @test "0" in matches
+    @test "1" in matches
+    @test "3" ∉ matches
+
+    matches = match("0155555592", "0", "1", "9", "2")
+    @test length(matches) == 4
+    @test "0" in matches
+    @test "1" in matches
+    @test "9" in matches
+    @test "2" in matches
+end
+
+@testset "matching multiple short intersecting strings" begin
+    strings = ["123", "12345"]
+    matches = match("12345", strings...)
+    @test length(matches) == 2
+
+    for s in strings
+        @test s in matches
+    end
+
+    strings = ["123", "12345", "234"]
+    matches = match("12345", strings...)
+    @test length(matches) == 3
+
+    for s in strings
+        @test s in matches
+    end
+
+    strings = ["123", "12345", "23"]
+    matches = match("12345", strings...)
+    @test length(matches) == 3
+
+    for s in strings
+        @test s in matches
+    end
+end
+
+@testset "intersections within intersections" begin
+    matches = match("12345", "234", "3")
+    @test length(matches) == 2
+
+    matches = match("1234567890", "12345", "567890", "123", "890", "9")
+    @test length(matches) == 5
+
+    matches = match("1234567890", "12345", "567890", "123", "890", "345", "23", "12")
+    @test length(matches) == 7
+
+    matches = match("1234567890", "2345678", "34567", "456", "5")
+    @test length(matches) == 4
+end
+
+@testset "find some intersects" begin
+    to_match = ["GACTG", "ACT", "ACGACTGAGCACT"]
+
+    matches = match("ATGTTGGACACTCGGCGGACGACTGAGCACTGGAACTTTTTAAA", to_match...)
+    @test length(matches) == 6
 
     for p in to_match
-        if !FIXED @test_skip p in matches  #set FIXED = true when fixing this stuff
-        else @test p in matches 
-        end
+        @test p in matches
     end
-
-    end
-    
 end
 
-# function get_rna(file_name::String)
+function bulktest(source::String, strings::Vector{String}, nmatches::Int)
+    matches = match(source, strings...)
+    @test length(matches) == nmatches
 
-
-# ■
-@testset "trivial" begin
-    matches = match(["0"], "0")
-    @test length(matches) == 1
-    @test "0" in matches
-
-    matches = match(["1"], "10")
-    @test length(matches) == 1
-    @test "1" in matches
-
-    matches = match(["1", "0"], "10")
-    @test length(matches) == 2
-    @test "0" in matches
-    @test "1" in matches
+    for s in strings
+        @test s in matches
+    end
 end
 
-@testset "drosophila simple" begin
-    rna = open("drosophila_suzukii_rna.fa") do file
+@testset "matching many little strings" begin
+    bulktest("ATGTTGGACACTCGGCGGACGACTGAGCACTGGAACTTTTTAAA", ["ACGACTGAGCACT", "GAC", "ACG", "ACGACT", "ACT"], 10)
+    bulktest("GGCTCAAATTACACGTAAACTTAAGAATATTCG", ["TAC", "ACA", "TTACA", "ATA", "TAT", "ATAT"] , 6)
+    bulktest("CAGTCATAAAATACATTCAAGTATCAATAAATAG", ["CAGTCATAA", "AGT", "CAT", "GTCAT"], 6)
+    bulktest("ACGACTGAGCACT", ["GACTG", "ACT"], 3)
+    bulktest("ATGTTGGACACTCGGCGGACGACTGAGCACTGGAACTTTTTAAA", ["ACT", "ACGACTGAGCACT", "GACTG"], 6)
+    bulktest("CACCCACAATCAGGCGAAGAGCCCCGAC", ["CAC", "GAG", "GCC"], 4)
+end
+
+@testset "small and big string on a moderate size source" begin
+    source = open("drosophila_suzukii_rna.fa") do file
         read(file, String)
     end
 
-    @time matches = match(["TAAAAAACGT"], rna)
+    string = "ATGTTGGAACCGGCGGGGAACTTTTTAAATTTTAATGGCTTCAGCGAACCCGAAAAAGCACTCGAGGGTGCCATCATAAGAGAGATTGAAGATGGAGTTCGCTGTGAGCAATGTAAATCAGATTGCCCGGGTTTTGCAGCTCACGATTGGAGGAAAACCTGCCAATCCTGCAAATGTCCTCGCGAGGCACATGCCATATACCAGCAACAAACGACCAACGTCCACGAGCGACTCGGCTTCAAACTGGTTTCCCCGGCGGATTCCGGAGTGGAGGCGAGGGATCTGGGCTTCACGTGGGTTCCGCCCGGACTGCGAGCCTCGTCGCGGATCATCCGCTATTTCGAGCAGCTGCCCGATGAGGCGGTGCCCCGGTTGGGCAGCGAGGGAGCCTGCAGTCGGGAGCGCCAGATCTCGTACCAGCTGCCCAAACAGGACCTCTCGCTGGAGCACTGTAAGCACCTGGAGGTGCAGCACGAGTCCTCCTTCGAGGACTTTGTGACGGCGCGGAACGAAATCGCACTGGATATAGCCTACATCAAGGATGCACCCTACGATGAGCATTGTGCGCACTGTGATAACGAGATAGCTGCCGGCGAGCTGGTTGTAGCGGCGCCCAAGTTTGTGGAGAGCGTGATGTGGCACCCCAAGTGCTTCACCTGCAGCACCTGCAACCTGCTCCTGGTGGACCTCACCTACTGTGTCCACGACGACAAGGTCTACTGCGAGCGCCACTATGCGGAAATGCTGAAGCCCCGCTGCGCTGGCTGTGATGAGGTGAGTTCCCTCTAG"
+
+    @time matches = match(source, "TAAAAAACGT")
     @test length(matches) == 39
     @test "TAAAAAACGT" in matches
 
-    section = "ATGTTGGAACCGGCGGGGAACTTTTTAAATTTTAATGGCTTCAGCGAACCCGAAAAAGCACTCGAGGGTGCCATCATAAGAGAGATTGAAGATGGAGTTCGCTGTGAGCAATGTAAATCAGATTGCCCGGGTTTTGCAGCTCACGATTGGAGGAAAACCTGCCAATCCTGCAAATGTCCTCGCGAGGCACATGCCATATACCAGCAACAAACGACCAACGTCCACGAGCGACTCGGCTTCAAACTGGTTTCCCCGGCGGATTCCGGAGTGGAGGCGAGGGATCTGGGCTTCACGTGGGTTCCGCCCGGACTGCGAGCCTCGTCGCGGATCATCCGCTATTTCGAGCAGCTGCCCGATGAGGCGGTGCCCCGGTTGGGCAGCGAGGGAGCCTGCAGTCGGGAGCGCCAGATCTCGTACCAGCTGCCCAAACAGGACCTCTCGCTGGAGCACTGTAAGCACCTGGAGGTGCAGCACGAGTCCTCCTTCGAGGACTTTGTGACGGCGCGGAACGAAATCGCACTGGATATAGCCTACATCAAGGATGCACCCTACGATGAGCATTGTGCGCACTGTGATAACGAGATAGCTGCCGGCGAGCTGGTTGTAGCGGCGCCCAAGTTTGTGGAGAGCGTGATGTGGCACCCCAAGTGCTTCACCTGCAGCACCTGCAACCTGCTCCTGGTGGACCTCACCTACTGTGTCCACGACGACAAGGTCTACTGCGAGCGCCACTATGCGGAAATGCTGAAGCCCCGCTGCGCTGGCTGTGATGAGGTGAGTTCCCTCTAG"
-
-    @time matches = match([section], rna)
-    @test length(matches) == 1
-    @test section in matches
+    @time matches = match(source, "TAAAAAACGT", string)
+    @test length(matches) == 40
+    @test "TAAAAAACGT" in matches
+    @test string in matches
 end
 
-@testset "find ACT" begin
-    pattern = "ACT"
-    to_match = [pattern]
-    @time matches = match(to_match, "ACGTACTGAGCACT")
-    @test length(matches) == 2
-    @test pattern in matches
 
-    @time matches = match(to_match, "ACGTAGTGAGCAC")
-    @test length(matches) == 0
-
-    @time matches = match(to_match, "ATGTTGGACACTCGGCGGGGAACTTTTTAAA")
-    @test length(matches) == 2
-    @test pattern in matches
-end
-
-@testset "find GAG" begin
-    pattern = "GAG"
-    to_match = [pattern]
-    @time matches = match(to_match, "ACGTACTGAGCACT")
-    @test length(matches) == 1
-    @test pattern in matches
-
-    @time matches = match(to_match, "ACGTAGTGAGCAC")
-    @test length(matches) == 1
-    @test pattern in matches
-
-    @time matches = match(to_match, "ATGTTGGACACTCGGCGGACGACTGAGCACTGGAACTTTTTAAA")
-    @test length(matches) == 1
-    # @test pattern in matches
-end
-
-@testset "find GAG, ACT, GTA" begin
-    to_match = ["GACTG", "ACT"]
-    @time matches = match(to_match, "ACGACTGAGCACT")
-    @test_broken length(matches) == 3
-    
-    for p in to_match
-        @test p in matches
-    end
-end
-
-@testset "find some intersects" begin 
-    to_match = ["GACTG", "ACT",  "ACGACTGAGCACT"]
-
-    @time matches = match(to_match, "ATGTTGGACACTCGGCGGACGACTGAGCACTGGAACTTTTTAAA")
-    @test_broken length(matches) == 6
-    
-    for p in to_match
-        if p == "GACTG" @test_broken p in matches  # some stuff happening to GACTG - function can't match it
-        else @test p in matches end
-    end
-end
-
-test_intersections("intersection function", 
-                    "ATGTTGGACACTCGGCGGACGACTGAGCACTGGAACTTTTTAAA",
-                    ["ACGACTGAGCACT", "GAC", "ACG", "ACGACT", "ACT"], 10
-                    )
-
-test_intersections("more intersections",
-                    "GGCTCAAATTACACGTAAACTTAAGAATATTCG",
-                    ["TAC", "ACA", "TTACA", "ATA", "TAT", "ATAT"], 6
-                    )
-
-test_intersections("one more intersection test",
-                   "CAGTCATAAAATACATTCAAGTATCAATAAATAG",
-                  ["CAGTCATAA", "AGT", "CAT", "GTCAT"], 6
-                  )
-
-@testset "more intersections" begin
-    
-end
-
-@testset "find CAC GAG GCC" begin
-    str = "CACCCACAATCAGGCGAAGAGCCCCGAC"
-    to_match = ["CAC", "GAG", "GCC"]
-    @time matches = match(to_match, str)
-    @test length(matches) == 4
-
-    for p in to_match
-        @test p in matches
-    end
-end
-
-@testset "another teest" begin
-    rna = open("drosophila_suzukii_rna.fa") do file
+@testset "match three big intersecting strings" begin
+    source = open("drosophila_suzukii_rna.fa") do file
         read(file, String)
     end
-    to_match = "TTCAGGAGAAGCTATGCTCGGACCCAGAAGTGGTAAACAAGGACCACTGCCACAATCTGGCCAATGAGCACGAGGCGCTTCTGGAGGACTGGTTCACCCACAATCAGGCGAAGAGCCCCGACCTGCAATCGTGGCTTTGCATCGACCAGCTGGCCGTCTGTTGTCCGCCGAACACCTACGGAGCAGATTGCCAGCCCTGCACCGACTGCAGCGGAAACGGTAAATGCAAGGGAGCCGGTACTCGAAAAGGCAACGGAAAGTGCAAATGTGATCCTGGCTATGCGGGACCCAACTGCAATGAGTGTGGATCGATGCACTACGAGTCCTTCCGTGACGAGAA"
-    @time matches = match([to_match], rna)
-    # println("length = " , length(matches))
-    @test length(matches) == 2
-    @test to_match in matches
-end
 
-@testset "more complex test" begin
-    rna = open("drosophila_suzukii_rna.fa") do file
-        read(file, String)
-    end
-    section1 = "TTCAGGAGAAGCTATGCTCGGACCCAGAAGTGGTAAACAAGGACCACTGCCACAATCTGGCCAATGAGCACGAGGCGCTTCTGGAGGACTGGTTCACCCACAATCAGGCGAAGAGCCCCGACCTGCAATCGTGGCTTTGCATCGACCAGCTGGCCGTCTGTTGTCCGCCGAACACCTACGGAGCAGATTGCCAGCCCTGCACCGACTGCAGCGGAAACGGTAAATGCAAGGGAGCCGGTACTCGAAAAGGCAACGGAAAGTGCAAATGTGATCCTGGCTATGCGGGACCCAACTGCAATGAGTGTGGATCGATGCACTACGAGTCCTTCCGTGACGAGAA"
-    section2 = "ATGTTGGAACCGGCGGGGAACTTTTTAAATTTTAATGGCTTCAGCGAACCCGAAAAAGCACTCGAGGGTGCCATCATAAGAGAGATTGAAGATGGAGTTCGCTGTGAGCAATGTAAATCAGATTGCCCGGGTTTTGCAGCTCACGATTGGAGGAAAACCTGCCAATCCTGCAAATGTCCTCGCGAGGCACATGCCATATACCAGCAACAAACGACCAACGTCCACGAGCGACTCGGCTTCAAACTGGTTTCCCCGGCGGATTCCGGAGTGGAGGCGAGGGATCTGGGCTTCACGTGGGTTCCGCCCGGACTGCGAGCCTCGTCGCGGATCATCCGCTATTTCGAGCAGCTGCCCGATGAGGCGGTGCCCCGGTTGGGCAGCGAGGGAGCCTGCAGTCGGGAGCGCCAGATCTCGTACCAGCTGCCCAAACAGGACCTCTCGCTGGAGCACTGTAAGCACCTGGAGGTGCAGCACGAGTCCTCCTTCGAGGACTTTGTGACGGCGCGGAACGAAATCGCACTGGATATAGCCTACATCAAGGATGCACCCTACGATGAGCATTGTGCGCACTGTGATAACGAGATAGCTGCCGGCGAGCTGGTTGTAGCGGCGCCCAAGTTTGTGGAGAGCGTGATGTGGCACCCCAAGTGCTTCACCTGCAGCACCTGCAACCTGCTCCTGGTGGACCTCACCTACTGTGTCCACGACGACAAGGTCTACTGCGAGCGCCACTATGCGGAAATGCTGAAGCCCCGCTGCGCTGGCTGTGATGAGGTGAGTTCCCTCTAG"
+    strings = ["ATGTTGGAACCGGCGGGGAACTTTTTAAATTTTAATGGCTTCAGCGAACCCGAAAAAGCACTCGAGGGTGCCATCATAAGAGAGATTGAAGATGGAGTTCGCTGTGAGCAATGTAAATCAGATTGCCCGGGTTTTGCAGCTCACGATTGGAGGAAAACCTGCCAATCCTGCAAATGTCCTCGCGAGGCACATGCCATATACCAGCAACAAACGACCAACGTCCACGAGCGACTCGGCTTCAAACTGGTTTCCCCGGCGGATTCCGGAGTGGAGGCGAGGGATCTGGG",
+               "ATGTTGGAACCGGCGGGGAACTTTTTAAATTTTAATGGCTTCAGCGAACCCGAAAAAGCACTCGAGGGTGCCATCATAAGAGAGATTGAAGATGGAGTTCGCTGTGAGCAATGTAAATCAGATTGCCCGGGTTTTGCAGCTCACGATTGGAGGAAAACCTGCCAATCCTGCAAATGTCCTCGCGAGGCACATGCCATATACCAGCAACAAACGACCAACGTCCACGAGCGACTCGGCTTCAAACTGGTTTCCCCGGCGGATTCCGGAGTGGAGGCGAGGGATCTGGGCTTCACGTGGGTTCCGCCCGGACTGCGAGCCTCGTCGCGGATCATCCGCTATTTCGAGCAGCTGCCCGATGAGGCGGTGCCCCGGTTGGGCAGCGAGGGAGCCTGCAGTCGGGAGCGCCAGATCTCGTACCAGCTGCCCAAACAGGACCTCTCGCTGGAGCACTGTAAGCACCTGGAGGTGCAGCACGAGTCCTCCTTCGAGGACTTTGTGACGGCGCGGAACGAAATCGCACTGGATATAGCCTACATCAAGGATGCACCCTACGATGAGCATTGTGCGCACTGTGATAACGAGATAGCTGCCGGCGAGCTGGTTGTAGCGGCGCCCAAGTTTGTGGAGAGCGTGATGTGGCACCCCAAGTGCTTCACCTGCAGCACCTGCAACCTGCTCCTGGTGGACCTCACCTACTGTGTCCACGACGACAAGGTCTACTGCGAGCGCCACTATGCGGAAATGCTGAAGCCCCGCTGCGCTGGCTGTGATGAGGTGAGTTCCCTCTAG",
+               "AATGGCTTCAGCGAACCCGAAAAAGCACTCGAGGGTGCCATCATAAGAGAGATTGAAGATGGAGTTCGCTGTGAGCAATGTAAATCAGATTGCCCGG"]
 
-    @time matches = match([section1, section2], rna)
+    @time matches = match(source, strings...)
     @test length(matches) == 3
-
 end
