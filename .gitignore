@@ -1,4 +1,7 @@
 build/
+data/
+
 .ccls-cache/
+
 *.ipynb
 .ipynb_checkpoints
