@@ -1,3 +1,4 @@
+#!/usr/bin/env pypy3
 from ahocorapy.keywordtree import KeywordTree
 import csv
 from time import time
