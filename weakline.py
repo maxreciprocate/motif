@@ -3,38 +3,41 @@ import csv
 from time import time
 import sys
 
-if len(sys.argv) < 2:
-    print(f"usage: {sys.argv[0]} <number_of_markers_to_add>")
+if len(sys.argv) < 4:
+    print(f"usage: {sys.argv[0]} <source_file> <markers_file> <output_file>")
     exit(1)
 
-nmarkers = int(sys.argv[1])
-print(f"collecting {nmarkers} markers")
+source_file = sys.argv[1]
+markers_file = sys.argv[2]
+output_file = sys.argv[3]
 
-with open("data/thaliana.fna") as file:
+start = time()
+with open(source_file) as file:
     source = file.read()
 
 kwtree = KeywordTree(case_insensitive=True)
-with open("data/markers.csv") as file:
-    for line in csv.reader(file):
-        nmarkers -= 1
-        if nmarkers <= 0: break
+# lookup table for the relative index of each marker to the order they came in
+markersids = {}
 
-        kwtree.add(line[1])
+with open(markers_file) as file:
+    markers = [line for line in csv.reader(file)]
 
-print("finished adding")
+for idx, marker in markers:
+    markersids[marker] = int(idx)
+    kwtree.add(marker)
 
 kwtree.finalize()
-print("done with building")
 
-def search(tree, source):
-    count = 0
-    for string, _ in tree.search_all(source):
-        count += 1
+output = bytearray(len(markers))
+for string, _ in kwtree.search_all(source):
+    output[markersids[string]] = 0x01
 
-    return count
-
-start = time()
-count = search(kwtree, source)
 duration = time() - start
 
-print(f"took {duration} seconds with #{count} matches")
+print(f"timing: {duration:.4f}s")
+
+for idx in range(0, len(output)):
+    output[idx] += 48
+
+with open(output_file, 'w+') as file:
+    file.write(output.decode('utf-8'))
