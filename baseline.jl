@@ -1,6 +1,7 @@
 import Base.match
 using DataStructures
 using Test
+using CSV
 
 mutable struct Vertex
     children::Dict{Char, Vertex}
@@ -84,6 +85,28 @@ function match(source::String, strings::String...)
 
     search(fsm, source)
 end
+
+function get_markers(filename::String, n_markers::Int)
+	df = CSV.read("$filename")
+	markers = Vector{String}()
+	
+	for i in 1:n_markers 
+		push!(markers, df[i, 2])
+	end
+	markers
+end
+
+function search_markers(markers::Vector{String}, source_name) 
+	source = open("$source_name") do file
+        read(file, String)
+	end
+	println("Starting search")
+	@time matches = match(source, markers...)
+	matches
+end
+
+markers = get_markers("./data/markers.csv", 500000)
+search_markers(markers, "./data/Arabidopsis_thaliana.TAIR10.dna.toplevel.fa")
 
 @testset "trivial, single matches" begin
     matches = match("0", "0")
@@ -181,10 +204,11 @@ end
     bulktest("ACGACTGAGCACT", ["GACTG", "ACT"], 3)
     bulktest("ATGTTGGACACTCGGCGGACGACTGAGCACTGGAACTTTTTAAA", ["ACT", "ACGACTGAGCACT", "GACTG"], 6)
     bulktest("CACCCACAATCAGGCGAAGAGCCCCGAC", ["CAC", "GAG", "GCC"], 4)
+    bulktest("1111111111", "1", "11", "111", "1111", "11111", "111111", 45)
 end
 
 @testset "small and big string on a moderate size source" begin
-    source = open("drosophila_suzukii_rna.fa") do file
+    source = open("./data/drosophila.fasta") do file
         read(file, String)
     end
 
@@ -202,7 +226,7 @@ end
 
 
 @testset "match three big intersecting strings" begin
-    source = open("drosophila_suzukii_rna.fa") do file
+    source = open("./data/drosophila.fasta") do file
         read(file, String)
     end
 
