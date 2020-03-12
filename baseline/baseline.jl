@@ -1,7 +1,5 @@
 module Baseline
 
-export match
-
 import Base.match
 using DataStructures
 using Test
@@ -13,10 +11,6 @@ mutable struct Vertex
     isroot::Bool
 
     Vertex() = new(Dict{Char, Vertex}(), nothing, nothing, false)
-end
-
-function Base.show(io::IO, vx::Vertex)
-    write(io, "Vertex{ $(keys(vx.children))$(if vx.string != nothing vx.string else "" end) }")
 end
 
 function add!(vx::Vertex, string, key::Int)
@@ -100,4 +94,5 @@ function match(sourcefilename::String, stringsfilename::String, outputfilename::
     output
 end
 
+export match
 end

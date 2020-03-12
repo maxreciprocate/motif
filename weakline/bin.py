@@ -1,7 +1,6 @@
 #!/usr/bin/env pypy3
 from ahocorapy.keywordtree import KeywordTree
 import csv
-from time import time
 import sys
 
 if len(sys.argv) < 4:
@@ -12,7 +11,6 @@ source_file = sys.argv[1]
 markers_file = sys.argv[2]
 output_file = sys.argv[3]
 
-start = time()
 with open(source_file) as file:
     source = file.read()
 
@@ -33,12 +31,8 @@ output = bytearray(len(markers))
 for string, _ in kwtree.search_all(source):
     output[markersids[string]] = 0x01
 
-duration = time() - start
-
-print(f"timing: {duration:.4f}s")
-
 for idx in range(0, len(output)):
-    output[idx] += 48
+    output[idx] += ord('0')
 
 with open(output_file, 'w+') as file:
     file.write(output.decode('utf-8'))
