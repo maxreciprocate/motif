@@ -47,6 +47,7 @@ for sourcefile in sourcefiles:
         output[idx] += ord('0')
 
     print(f"done with {sourcefile}")
+    output_file.write(sourcefile.split('/')[-1] + " ")
     output_file.write(output.decode('utf-8'))
     output_file.write('\n')
 

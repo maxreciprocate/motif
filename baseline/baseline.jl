@@ -113,8 +113,10 @@ function match(sourcesfilename::String, stringsfilename::String, outputfilename:
             end
         end
 
+        write(outputfile, split(sourcefilename, '/')[end] * " ")
         write(outputfile, String(output .+ UInt8('0')))
         write(outputfile, '\n')
+
         println("done with $sourcefilename")
 
         fill!(output, 0)
