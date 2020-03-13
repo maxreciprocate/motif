@@ -1,4 +1,4 @@
-module Baseline
+module Bassline
 
 import Base.match
 using DataStructures
@@ -94,8 +94,8 @@ function match(sourcesfilename::String, stringsfilename::String, outputfilename:
     println("finished")
     outputfile = open(outputfilename, "w")
 
-    output = zeros(UInt8, length(strings))
-    for sourcefilename in readlines(sourcesfilename)
+    @Threads.threads for sourcefilename in readlines(sourcesfilename)
+        output = zeros(UInt8, length(strings))
         source = readline("data/" * sourcefilename)
 
         vx = fsm
@@ -113,13 +113,10 @@ function match(sourcesfilename::String, stringsfilename::String, outputfilename:
             end
         end
 
-        write(outputfile, split(sourcefilename, '/')[end] * " ")
-        write(outputfile, String(output .+ UInt8('0')))
-        write(outputfile, '\n')
+        formattedoutput = split(sourcefilename, '/')[end] * " " * String(output .+ UInt8('0')) * '\n'
+        write(outputfile, formattedoutput)
 
         println("done with $sourcefilename")
-
-        fill!(output, 0)
     end
 
     close(outputfile)

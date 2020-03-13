@@ -25,9 +25,9 @@ do
 
   # skip already cleansed genomes
   if [[ $(wc -l $genome | cut -d" " -f1) -eq 0 ]]; then
-      echo "adding $genome"
-      echo $genome >> $1genomes.txt
-      continue
+    echo "adding $genome"
+    echo $genome >> $1genomes.txt
+    continue
   fi
 
   awk -f clean.awk $genome > $genome.cleaned

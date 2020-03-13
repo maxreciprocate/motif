@@ -1,5 +1,5 @@
 #!/usr/bin/env julia
-contenders = chmod.(["baseline/bin.jl", "weakline/bin.py"], 0o777)
+contenders = chmod.(["bassline/bin.jl", "sub-bass/bin.py"], 0o777)
 
 function benchmark(sourcesfilename, stringsfilename)
     if !isfile(sourcesfilename)
