@@ -78,20 +78,49 @@ function match(source::String, strings)::String
     output .+ UInt8('0') |> String
 end
 
-function match(sourcefilename::String, stringsfilename::String, outputfilename::String)
-    source = open(sourcefilename) do file
-        read(file, String)
+function match(sourcesfilename::String, stringsfilename::String, outputfilename::String)
+    println("building")
+    fsm = Vertex()
+    fsm.isroot = true
+
+    strings = readlines(stringsfilename)
+    strings = map(line -> split(line, ',')[2], strings)
+
+    for (idx, string) in enumerate(strings)
+        add!(fsm, string, idx)
     end
 
-    markers = map(line -> split(line, ',')[2], readlines(stringsfilename))
+    build!(fsm)
+    println("finished")
+    outputfile = open(outputfilename, "w")
 
-    output = match(source, markers)
+    output = zeros(UInt8, length(strings))
+    for sourcefilename in readlines(sourcesfilename)
+        source = readline("data/" * sourcefilename)
 
-    open(outputfilename, "w+") do file
-        write(file, output)
+        vx = fsm
+        for char in source
+            vx = search(vx, char)
+            evx = vx
+
+            while true
+                if evx.key != nothing
+                    output[evx.key] = 1
+                end
+
+                evx.isroot && break
+                evx = evx.suffix
+            end
+        end
+
+        write(outputfile, String(output .+ UInt8('0')))
+        write(outputfile, '\n')
+        println("done with $sourcefilename")
+
+        fill!(output, 0)
     end
 
-    output
+    close(outputfile)
 end
 
 export match

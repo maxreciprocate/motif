@@ -89,5 +89,5 @@ end
 end
 
 @testset "benchmark 2000 markers" begin
-    @time match("./data/thaliana.fna", "./data/2000markers.csv", "result.txt")
+    @time match("data/1genomes.txt", "./data/2000markers.csv", "result.txt")
 end
