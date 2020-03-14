@@ -15,9 +15,9 @@ if [[ -e $1genomes.txt ]]; then
 fi
 
 # extracting all the boys (sorry)
-find bank -regex ".*\.fasta.gz" -type f -exec gzip -d {} \;
+find bank -name "*.fasta.gz" -exec gzip -d {} \;
 
-genomes=$(ls bank | grep ".*\.fasta" | head -n $1)
+genomes=$(ls bank | grep ".*\.fasta$" | head -n $1)
 
 for genome in $genomes
 do

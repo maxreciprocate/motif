@@ -3,6 +3,7 @@ module Bassline
 import Base.match
 using DataStructures
 using Test
+using Base.Threads
 
 mutable struct Vertex
     children::Dict{Char, Vertex}
@@ -94,7 +95,7 @@ function match(sourcesfilename::String, stringsfilename::String, outputfilename:
     println("finished")
     outputfile = open(outputfilename, "w")
 
-    @Threads.threads for sourcefilename in readlines(sourcesfilename)
+    @threads for sourcefilename in readlines(sourcesfilename)
         output = zeros(UInt8, length(strings))
         source = readline("data/" * sourcefilename)
 

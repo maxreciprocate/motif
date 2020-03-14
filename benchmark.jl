@@ -43,9 +43,6 @@ function benchmark(sourcesfilename, stringsfilename)
     println("all the contenders agree")
 end
 
-import REPL
-using REPL.TerminalMenus
-
-benches = ["data/1genomes.txt data/2000markers.csv", "data/20genomes.txt data/800000markers.csv"]
-
-benchmark(split(benches[request(RadioMenu(benches))], ' ')...)
+ENV["JULIA_NUM_THREADS"] = ENV["PYPY_NUM_THREADS"] = 4
+benchmark("data/1genomes.txt", "data/8000markers.csv")
+benchmark("data/10genomes.txt", "data/80000markers.csv")
