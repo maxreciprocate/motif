@@ -1,20 +1,21 @@
 #!/usr/bin/env julia
-contenders = chmod.(["bassline/bin.jl", "sub-bass/bin.py"], 0o777)
+using Plots
+contenders = chmod.(["sub-bass/bin.py", "bassline/bin.jl"], 0o777)
 
-function benchmark(sourcesfilename, stringsfilename)
-    if !isfile(sourcesfilename)
-        println("$sourcesfilename doesn't exist")
+function benchmark(sources::Vector{String})
+    if !all(isfile.(sources))
+        println("bench data is not present")
         exit(1)
     end
 
-    if !isfile(stringsfilename)
-        println("$stringsfilename doesn't exist")
-        exit(1)
-    end
+    timings = zeros(length(contenders))
 
     for (idx, contender) in enumerate(contenders)
         println("running $(split(contender, '/')[1])...")
-        @time run(`./$contender $sourcesfilename $stringsfilename output-$idx.txt`)
+        start = time()
+        run(`./$contender $(sources[1]) $(sources[2]) output-$idx.txt`)
+        timings[idx] = time() - start
+        println(timings[idx])
     end
 
     output1 = Dict{String, String}()
@@ -41,8 +42,43 @@ function benchmark(sourcesfilename, stringsfilename)
     end
 
     println("all the contenders agree")
+
+    timings
 end
 
 ENV["JULIA_NUM_THREADS"] = ENV["PYPY_NUM_THREADS"] = 4
-benchmark("data/1genomes.txt", "data/8000markers.csv")
-benchmark("data/10genomes.txt", "data/80000markers.csv")
+
+benchmarks = [
+    ["data/1genomes.txt", "data/8000markers.csv"],
+    ["data/10genomes.txt", "data/80000markers.csv"],
+    ["data/100genomes.txt", "data/800000markers.csv"],
+    ["data/1000genomes.txt", "data/8000000markers.csv"],
+]
+
+if length(ARGS) > 0
+    try
+        nbenchs = round(Int, log10(parse(Int, ARGS[1]))) + 1
+
+        if nbenchs <= size(benchmarks)[1]
+            global benchmarks = benchmarks[1:nbenchs]
+        end
+    catch
+        println("usage: julia download.jl <number of benches>")
+        exit(1)
+    end
+end
+
+results = benchmark.(benchmarks)
+
+plot(dpi=200)
+
+for (idx, timings) in enumerate(eachrow(hcat(results...)))
+    plot!(timings, label=first(split(contenders[idx], '/')), legend=:topleft)
+    println(timings)
+end
+
+nbenchs = size(results)[1]
+xticks!([1:nbenchs;], ["$(10^i),$(10^i * 8000)" for i in 0:nbenchs-1])
+ylabel!("seconds")
+xlabel!("genomes & markers")
+savefig("timings.png")
