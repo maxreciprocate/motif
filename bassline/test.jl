@@ -1,46 +1,45 @@
-include("baseline.jl")
-using .Baseline, Test
+using Test
 
 @testset "trivial, single matches" begin
-    @test match("0", ["0"]) == "1"
-    @test match("0", ["1"]) == "0"
-    @test match("10", ["1"]) == "1"
-    @test match("11", ["1"]) == "1"
-    @test match("11", ["0"]) == "0"
-    @test match("10", ["0"]) == "1"
-    @test match("10111", ["0"]) == "1"
+    @test match("A", ["A"]) == "1"
+    @test match("A", ["C"]) == "0"
+    @test match("AC", ["A"]) == "1"
+    @test match("AA", ["A"]) == "1"
+    @test match("AA", ["C"]) == "0"
+    @test match("AC", ["C"]) == "1"
+    @test match("ACAAA", ["C"]) == "1"
 end
 
 @testset "matching multiple single-char strings" begin
-    @test match("10001", ["0", "1", "3"]) == "110"
-    @test match("0155555592", ["0", "1", "9", "2"]) == "1111"
-    @test match("0155555592", ["7", "5", "3", "1"]) == "0101"
+    @test match("ACCCA", ["A", "C", "G"]) == "110"
+    @test match("ACTTTTTTCG", ["A", "C", "G"]) == "111"
+    @test match("GCTTTTTTCG", ["T", "G", "C", "A"]) == "1110"
 end
 
-@testset "matching multiple short intersecting strings" begin
-    strings = ["123", "12345"]
-    @test match("12345", strings) == "11"
+# @testset "matching multiple short intersecting strings" begin
+#     strings = ["123", "12345"]
+#     @test match("12345", strings) == "11"
 
-    strings = ["123", "12345", "234"]
-    @test match("12345", strings) == "111"
+#     strings = ["123", "12345", "234"]
+#     @test match("12345", strings) == "111"
 
-    strings = ["123", "12345", "23"]
-    @test match("12345", strings) == "111"
-end
+#     strings = ["123", "12345", "23"]
+#     @test match("12345", strings) == "111"
+# end
 
-@testset "intersections within intersections" begin
-    @test match("12345", ["234", "3"]) == "11"
+# @testset "intersections within intersections" begin
+#     @test match("12345", ["234", "3"]) == "11"
 
-    matches = match("1234567890", ["12345", "567890", "123", "890", "9"])
-    @test matches == "11111"
+#     matches = match("1234567890", ["12345", "567890", "123", "890", "9"])
+#     @test matches == "11111"
 
-    matches = match("1234567890", ["12345", "567890", "123", "890", "345", "23", "12"])
-    @test matches == "1111111"
+#     matches = match("1234567890", ["12345", "567890", "123", "890", "345", "23", "12"])
+#     @test matches == "1111111"
 
-    matches = match("1234567890", ["2345678", "34567", "456", "5"])
-    @test matches == "1111"
+#     matches = match("1234567890", ["2345678", "34567", "456", "5"])
+#     @test matches == "1111"
 
-end
+# end
 
 @testset "find some intersects" begin
     to_match = ["GACTG", "ACT", "ACGACTGAGCACT"]
@@ -60,11 +59,11 @@ end
     bulktest("ACGACTGAGCACT", ["GACTG", "ACT"], "11")
     bulktest("ATGTTGGACACTCGGCGGACGACTGAGCACTGGAACTTTTTAAA", ["ACT", "ACGACTGAGCACT", "GACTG"], "111")
     bulktest("CACCCACAATCAGGCGAAGAGCCCCGAC", ["CAC", "GAG", "GCC"], "111")
-    bulktest("1111111111", ["1", "11", "111", "1111", "11111", "111111"], "111111")
+    # bulktest("1111111111", ["1", "11", "111", "1111", "11111", "111111"], "111111")
 end
 
 @testset "small and big string on a moderate size source" begin
-    source = open("./data/drosophila.fasta") do file
+    source = open("../data/drosophila.fasta") do file
         read(file, String)
     end
 
@@ -76,7 +75,7 @@ end
 
 
 @testset "match three big intersecting strings" begin
-    source = open("./data/drosophila.fasta") do file
+    source = open("../data/drosophila.fasta") do file
         read(file, String)
     end
 
@@ -89,5 +88,5 @@ end
 end
 
 @testset "benchmark 2000 markers" begin
-    @time match("data/1genomes.txt", "./data/2000markers.csv", "result.txt")
+    @time match("../data/1genomes.txt", "../data/2000markers.csv", "result.txt")
 end

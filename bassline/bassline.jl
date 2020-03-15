@@ -1,5 +1,4 @@
-module Bassline
-
+#!/usr/bin/env julia
 import Base.match
 using DataStructures
 using Test
@@ -123,5 +122,10 @@ function match(sourcesfilename::String, stringsfilename::String, outputfilename:
     close(outputfile)
 end
 
-export match
+if length(ARGS) != 3
+    println("usage: julia bin.jl <sourcefile> <stringsfile> <outputfile>")
+    exit(1)
 end
+
+println("#$(Threads.nthreads()) we have all the threads")
+match(ARGS...)

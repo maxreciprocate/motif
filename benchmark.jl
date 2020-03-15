@@ -1,6 +1,14 @@
 #!/usr/bin/env julia
 using Plots
-contenders = chmod.(["sub-bass/bin.py", "bassline/bin.jl"], 0o777)
+using Dates: today
+
+contenders = [
+    ("subbass", "subbass/subbass.py"),
+    ("bassline", "bassline/bassline.jl"),
+    ("bassline-double-build", "bassline/double-build.jl"),
+]
+
+chmod.(last.(contenders), 0o777)
 
 function benchmark(sources::Vector{String})
     if !all(isfile.(sources))
@@ -10,10 +18,10 @@ function benchmark(sources::Vector{String})
 
     timings = zeros(length(contenders))
 
-    for (idx, contender) in enumerate(contenders)
-        println("running $(split(contender, '/')[1])...")
+    for (idx, (name, exe)) in enumerate(contenders)
+        println("running $name...")
         start = time()
-        run(`./$contender $(sources[1]) $(sources[2]) output-$idx.txt`)
+        run(`./$exe $(sources[1]) $(sources[2]) output-$idx.txt`)
         timings[idx] = time() - start
         println(timings[idx])
     end
@@ -46,12 +54,11 @@ function benchmark(sources::Vector{String})
     timings
 end
 
-ENV["JULIA_NUM_THREADS"] = ENV["PYPY_NUM_THREADS"] = 4
-
 benchmarks = [
     ["data/1genomes.txt", "data/8000markers.csv"],
     ["data/10genomes.txt", "data/80000markers.csv"],
     ["data/100genomes.txt", "data/800000markers.csv"],
+    ["data/1000genomes.txt", "data/3000000markers.csv"],
     ["data/1000genomes.txt", "data/8000000markers.csv"],
 ]
 
@@ -68,17 +75,21 @@ if length(ARGS) > 0
     end
 end
 
+ENV["JULIA_NUM_THREADS"] = ENV["PYPY_NUM_THREADS"] = 4
+
 results = benchmark.(benchmarks)
 
 plot(dpi=200)
 
 for (idx, timings) in enumerate(eachrow(hcat(results...)))
-    plot!(timings, label=first(split(contenders[idx], '/')), legend=:topleft)
+    plot!(timings, label=first(contenders[idx]), legend=:topleft)
     println(timings)
 end
 
 nbenchs = size(results)[1]
 xticks!([1:nbenchs;], ["$(10^i),$(10^i * 8000)" for i in 0:nbenchs-1])
 ylabel!("seconds")
+commit = read(`git rev-parse HEAD`, String)
+title!("$(today()) $(commit[1:10])")
 xlabel!("genomes & markers")
 savefig("timings.png")
