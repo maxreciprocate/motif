@@ -54,12 +54,12 @@ kwtree.finalize()
 print("finished")
 
 output_file = open(output_file, 'w')
-p = mp.Pool(processes=4)
-#p = mp.Pool(processes=int(os.environ["PYPY_NUM_THREADS"))
+
+p = mp.Pool(processes=int(os.environ["PYPY_NUM_THREADS"]))
 n= len(markers)
-start = time.time()
+
 for out, source in p.imap_unordered(search_markers, [(kwtree, s, n) for s in sourcefiles]):
     output_file.write(source.split('/')[-1] + " ")
     output_file.write(out.decode('utf-8'))
     output_file.write('\n')
-print(time.time() - start)
+
