@@ -4,6 +4,7 @@ using Dates: today
 
 contenders = [
     ("subbass", "subbass/subbass.py"),
+    ("subbass_parallel", "subbass/subbass_parallel.py"),
     ("bassline", "bassline/bassline.jl"),
     ("bassline-double-build", "bassline/double-build.jl"),
 ]
