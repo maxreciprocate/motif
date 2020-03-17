@@ -5,30 +5,63 @@ import os
 import sys
 # from copy import deepcopy
 import multiprocessing as mp
-import time 
+import concurrent.futures
+import time
+import ctypes
 
-def search_markers(ar):
-    kwtree, sourcefile, nmarkers = ar[0], ar[1], ar[2]
-    with open(sourcefile) as file:
-        source = file.readlines()[0]
+kwtree = KeywordTree(case_insensitive=False)
 
-    output = bytearray(nmarkers)
-    for string, _ in kwtree.search_all(source):
-        output[markersids[string]] = 0x01
+def search_markers(sourcefile_arr, output_file, lock, nmarkers):
+    for sourcefile in sourcefile_arr:
+        sourcefile = sourcefile.value.decode('utf-8')
+        print("reading sourcefile {}".format(sourcefile))
 
-    for idx in range(0, len(output)):
-        output[idx] += ord('0')
+        lock.acquire()
+        try:
+            with open(sourcefile, 'r') as file:
+                source = file.readlines()[0]
+        except MemoryError:
+            print("Got an MemoryError working with {}".format(sourcefile))
+        finally:        
+            lock.release()
 
-    return output, sourcefile
+        print("searching in {}".format(sourcefile))
+        output = bytearray(nmarkers)
+        for string, _ in kwtree.search_all(source):
+            output[markersids[string]] = 0x01
+
+        for idx in range(0, len(output)):
+            output[idx] += ord('0')
+        
+        lock.acquire()
+        with open(output_file.value.decode('utf-8'), 'a') as f:
+            f.write(sourcefile.split('/')[-1] + " ")
+            f.write(output.decode('utf-8'))
+            f.write('\n')
+        lock.release()    
+
+        print("Done with {}".format(sourcefile))
+        del output
+        del source
+
+
+def do_stuff(sourcefile, output_file, lock, nmarkers):
+    sourcefile = sourcefile.value.decode('utf-8')
+
+    lock.acquire()
+    with open(output_file.value.decode('utf-8'), 'a') as f:
+        f.write(sourcefile.split('/')[-1] + " ")
+        f.write(str(n))
+        f.write('\n')
+
+    lock.release()    
     
-
 if len(sys.argv) != 4:
     print(f"usage: {sys.argv[0]} <sources_file> <markers_file> <output_file> ")
     exit(1)
 
 _, sources_file, markers_file, output_file = sys.argv
-# n_threads = int(n_threads)
-# sources_file should have relative filepaths to source files
+
 prefix = "/".join(sources_file.split('/')[:-1])
 with open(sources_file) as file:
     sourcefiles = [prefix + '/' + line.rstrip('\n') for line in file]
@@ -38,8 +71,6 @@ if len(sourcefiles) < 1:
     exit(1)
 
 
-kwtree = KeywordTree(case_insensitive=True)
-# lookup table for the relative index of each marker to the order they came in
 markersids = {}
 
 print("building")
@@ -53,13 +84,39 @@ for idx, marker in markers:
 kwtree.finalize()
 print("finished")
 
-output_file = open(output_file, 'w')
+n = len(markers)
 
-p = mp.Pool(processes=int(os.environ["PYPY_NUM_THREADS"]))
-n= len(markers)
+# clear output file
+f = open(output_file, 'w')
+f.close()
 
-for out, source in p.imap_unordered(search_markers, [(kwtree, s, n) for s in sourcefiles]):
-    output_file.write(source.split('/')[-1] + " ")
-    output_file.write(out.decode('utf-8'))
-    output_file.write('\n')
+# encode output filename for ctypes value
+output_file = output_file.encode('utf-8')
+out_file = mp.Value(ctypes.c_char_p, output_file)
 
+processes = []
+l = mp.Lock()
+start = time.time()
+
+n_threads = int(os.environ.get('PYPY_NUM_THREADS', 1))
+files_per_thread, files_left = len(sourcefiles) // n_threads, len(sourcefiles) % n_threads
+
+for pr in range(n_threads):
+    n_files = files_per_thread + 1 if files_left else files_per_thread
+    files_left = max(files_left-1, 0)
+    # s_files = mp.Array(ctypes.c_char_p, n_files)
+    s_files = []
+    for f in range(n_files):
+        try:
+            f_name = sourcefiles.pop()
+        except:
+            break
+        s_files.append(mp.Value(ctypes.c_char_p, f_name.encode('utf-8')))
+
+    new_process = mp.Process(target=search_markers, args=(s_files, out_file, l, n))
+    processes.append(new_process)
+
+[pr.start() for pr in processes]
+[pr.join() for pr in processes]
+
+print(time.time() - start)
