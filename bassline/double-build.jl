@@ -1,48 +1,36 @@
 #!/usr/bin/env julia
 import Base.match
 using DataStructures: Queue, enqueue!
-using Base.Threads: @threads
+using Base.Threads: @threads, nthreads
+
+const T = Dict{Char, UInt8}(zip(['A', 'C', 'G', 'T'], 1:4))
+const Lut = [get(T, Char(char), 0x0) for char in UInt('A'):UInt('T')]
+const Root = 0x0
 
 mutable struct Vertex
-    children::Dict{Char, Vertex}
-    key::Union{UInt32, Nothing}
-    suffix::Union{Vertex, Nothing}
     isroot::Bool
-    Z::UInt32
+    key::UInt32
+    position::UInt32
+    suffix::Union{Nothing, Vertex}
+    children::Vector{Union{Nothing, Vertex}}
 
-    Vertex() = new(Dict{Char, Vertex}(), nothing, nothing, false, 0)
+    Vertex() = new(false, 0, 0, nothing, Vector{Union{Nothing, Vertex}}(nothing, 4))
 end
-# ■
 
-function add!(vx::Vertex, string, key::UInt32)
+function add!(vx::Vertex, string, key::Int)
     for char in string
-        if !haskey(vx.children, char)
-            vx.children[char] = Vertex()
+        if vx.children[T[char]] == nothing
+            vx.children[T[char]] = Vertex()
         end
 
-        vx = vx.children[char]
+        vx = vx.children[T[char]]
     end
 
     vx.key = key
 end
 
-function build!(root::Vertex)
-    queue = Queue{Vertex}()
-    enqueue!(queue, root)
-
-    for vx in queue, (char, child) in vx.children
-        child.suffix = if vx.isroot
-            vx
-        else
-            search(vx.suffix, char)
-        end
-
-        enqueue!(queue, child)
-    end
-end
-
-function search(vx::Vertex, char::Char)
-    if haskey(vx.children, char)
+function search(vx::Vertex, char::UInt8)
+    if vx.children[char] != nothing
         vx.children[char]
     elseif vx.isroot
         vx
@@ -51,115 +39,107 @@ function search(vx::Vertex, char::Char)
     end
 end
 
-# ■
+function build!(root::Vertex)
+    queue = Queue{Vertex}()
+    enqueue!(queue, root)
 
-const T = Dict{Char, UInt8}('A' => 1, 'C' => 2, 'G' => 3, 'T' => 4)
+    for vx in queue, (char, child) in enumerate(vx.children)
+        child == nothing && continue
 
-function build_things(strfname::String)
-    build1start = time()
+        child.suffix = if vx.isroot
+            vx
+        else
+            search(vx.suffix, UInt8(char))
+        end
+
+        enqueue!(queue, child)
+    end
+end
+
+function create(markersfn::String)
     fsm = Vertex()
-    fsm.suffix = fsm
     fsm.isroot = true
 
-    sumlengths = 0
+    markers = last.(split.(readlines(markersfn), ','))
+    sumlengths = 0x0
 
-    strings = readlines(strfname)
-    strings = map(line -> split(line, ',')[2], strings)
-
-    for (idx, string) in enumerate(strings)
-        add!(fsm, string, UInt32(idx))
-        sumlengths += length(string)
+    for (idx, marker) in enumerate(markers)
+        add!(fsm, marker, idx)
+        sumlengths += length(marker)
     end
 
     build!(fsm)
-    build1time = time() - build1start
-    println("finished dict building in $build1time")
-
-    build2start = time()
 
     queue = Queue{Vertex}()
     enqueue!(queue, fsm)
-    P = UInt32(0)
-    fsm.Z = P
-    X = zeros(UInt32, (4, sumlengths+1))
+    fsm.position = Root
 
-    ENDS = Dict{UInt32, Vector{UInt32}}()
+    table = ones(UInt32, 4 * (sumlengths+1))
+    words = Dict{UInt32, Vector{UInt32}}()
 
-    for vx in queue
-        thisP = vx.Z
-        for C in ['A', 'C', 'G', 'T']
-            if haskey(vx.children, C)
-                child = vx.children[C]
-                P += 1
-                # new alloc
-                X[4*thisP + T[C]] = P
-                # save position
-                child.Z = P
+    edge = Root
+    for vx in queue, char in 0x1:0x4
+        if vx.children[char] != nothing
+            child = vx.children[char]
+            enqueue!(queue, child)
 
-                evx = child
-                while true
-                    if evx.key != nothing
-                        haskey(ENDS, P) || (ENDS[P] = Vector{UInt32}())
-                        push!(ENDS[P], evx.key)
-                    end
+            edge += 1
+            table[4 * vx.position + char] = edge
+            child.position = edge
 
-                    evx.isroot && break
-                    evx = evx.suffix
+            evx = child
+            while true
+                if evx.key != 0
+                    haskey(words, edge) || (words[edge] = Vector{UInt32}())
+                    push!(words[edge], evx.key)
                 end
 
-                enqueue!(queue, vx.children[C])
-            else
-                # inline here
-                X[4*thisP + T[C]] = search(vx.suffix, C).Z
+                evx.isroot && break
+                evx = evx.suffix
             end
 
+        elseif vx.suffix != nothing
+            table[4 * vx.position + char] = search(vx.suffix, char).position
         end
     end
 
-    build2time = time() - build2start
-    println("finished table building in $build2time")
-
-
-    X, ENDS, length(strings)
+    table, words, length(markers)
 end
 
-function match(ssfname::String, strfname::String, outfname::String)
-    X, ENDS, N = build_things(strfname)
-    outputf = open(outfname, "w")
+function match(sourcesfn::String, markersfn::String, outputfn::String)
+    table, words, nmarkers = create(markersfn)
 
-    @threads for sfname in readlines(ssfname)
-        source = readline("data/$sfname")
-        P = UInt32(0)
-        output = zeros(UInt8, N)
+    prefixdir = join(split(sourcesfn, '/')[1:end-1], '/')
+    outputf = open(outputfn, "w")
 
-        for C in source
-            if C == 'N'
-                P = UInt32(0)
+    @threads for sourcefn in readlines(sourcesfn)
+        output = zeros(UInt8, nmarkers)
+
+        vx = Root
+        for char in read(joinpath(prefixdir, sourcefn))
+            if char == 0x4e
+                vx = Root
                 continue
             end
 
-            P = X[4*P + T[C]]
+            @inbounds vx = table[4 * vx + Lut[char - 0x40]]
 
-            if haskey(ENDS, P)
-                for key in ENDS[P]
-                    output[key] = 0x01
+            if haskey(words, vx)
+                for word in words[vx]
+                    @inbounds output[word] = 0x1
                 end
             end
         end
 
-        println("done with $sfname")
-
-        formattedoutput = split(sfname, '/')[end] * " " * String(output .+ UInt8('0')) * '\n'
-        write(outputf, formattedoutput)
+        write(outputf, "$(last(split(sourcefn, '/'))) " * String(output .+ 0x30) * '\n')
     end
 
     close(outputf)
 end
 
 if length(ARGS) != 3
-    println("# usage: julia bin.jl <sourcefile> <stringsfile> <outputfile>")
+    println("# usage: julia $PROGRAM_FILE <sourcefile> <stringsfile> <outputfile>")
     exit(1)
 end
 
-println("We have this many threads = $(Threads.nthreads())")
 match(ARGS...)
