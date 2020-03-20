@@ -97,6 +97,9 @@ end
     end
 
     @testset "with repeating markers" begin
-        @test_skip match("ACCCA", ["A", "C", "G", "C"]) == "1101"
+        @test match("ACCCA", ["A", "C", "G", "C", "C", "C"]) == "110111"
+        @test match("ACCCA", ["ACCCA", "ACCCA", "A", "ACCA", "TG"]) == "11110"
+        @test match("GGGGG", ["GG", "GG", "GGG", "GGGGG", "GGGGG", "GGGGGG"]) == "111110"
+        @test match("AGGGGGANA", ["GGGG", "AG", "GAA", "GA", "GGGG", "GAA", "GGGG"]) == "1101101"
     end
 end
