@@ -13,7 +13,7 @@ function match(source::String, markers::Vector{String})
     outputfn, foutput = mktemp()
 
     write(fsource, source)
-    write(fsources, sourcefn)
+    write(fsources, last(split(sourcefn, '/')))
 
     close(foutput)
     close(fsource)
