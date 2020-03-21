@@ -2,6 +2,7 @@
 from ahocorapy.keywordtree import KeywordTree
 import csv
 import sys
+import time
 
 if len(sys.argv) != 4:
     print(f"usage: {sys.argv[0]} <sources_file> <markers_file> <output_file>")
@@ -27,21 +28,27 @@ with open(markers_file) as file:
     markers = [line for line in csv.reader(file)]
 
 for idx, marker in markers:
-    markersids[marker] = int(idx)
+    # markersids[marker] = int(idx)
+    if markersids.get(marker, None):
+        markersids[marker].append(int(idx))
+    else:
+        markersids[marker] = [int(idx)]
+        
     kwtree.add(marker)
 
 kwtree.finalize()
 print("finished")
 
 output_file = open(output_file, 'w')
-
+start = time.time()
 for sourcefile in sourcefiles:
     with open(sourcefile) as file:
         source = file.readlines()[0]
 
     output = bytearray(len(markers))
     for string, _ in kwtree.search_all(source):
-        output[markersids[string]] = 0x01
+        for mark in markersids[string]:
+            output[markersids[mark]] = 0x01
 
     for idx in range(0, len(output)):
         output[idx] += ord('0')
@@ -50,5 +57,5 @@ for sourcefile in sourcefiles:
     output_file.write(sourcefile.split('/')[-1] + " ")
     output_file.write(output.decode('utf-8'))
     output_file.write('\n')
-
+print(time.time() - start)
 output_file.close()
