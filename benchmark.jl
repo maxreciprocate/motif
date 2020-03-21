@@ -3,6 +3,7 @@ using Plots
 using Dates: today
 
 contenders = [
+    ("topline", "motif/build/main"),
     ("subbass", "subbass/subbass.py"),
     ("subbass_parallel", "subbass/subbass_parallel.py"),
     ("bassline", "bassline/bassline.jl"),

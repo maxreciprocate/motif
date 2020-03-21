@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 # usage: ./extract.sh <number_of_genomes>
 if (( $# != 1)); then
   echo "usage: ./extract.sh <number_of_genomes>"
@@ -17,14 +17,12 @@ fi
 # extracting all the boys (sorry)
 find bank -name "*.fasta.gz" -exec gzip -d {} \;
 
-genomes=$(ls bank | grep ".*\.fasta$" | head -n $1)
+genomes=$(ls bank | find bank -name "*.fasta" | head -n $1)
 
 for genome in $genomes
 do
-  genome=bank/$genome
-
   # skip already cleansed genomes
-  if [[ $(wc -l $genome | cut -d" " -f1) -eq 0 ]]; then
+  if [[ $(wc -l $genome | xargs | cut -d" " -f1) -eq 0 ]]; then
     echo "adding $genome"
     echo $genome >> $1genomes.txt
     continue
@@ -34,7 +32,7 @@ do
 
   if [[ $? -eq 0 ]]; then
     mv $genome.cleaned $genome
-    echo "adding $genome"
+    echo "adding test $genome"
     echo $genome >> $1genomes.txt
   else
     rm $genome.cleaned
