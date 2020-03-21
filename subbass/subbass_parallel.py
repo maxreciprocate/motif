@@ -28,7 +28,8 @@ def search_markers(sourcefile_arr, output_file, lock, nmarkers):
         print("searching in {}".format(sourcefile))
         output = bytearray(nmarkers)
         for string, _ in kwtree.search_all(source):
-            output[markersids[string]] = 0x01
+            for mark_id in markersids[string]:
+                output[mark_id - 1] = 0x01
 
         for idx in range(0, len(output)):
             output[idx] += ord('0')
@@ -44,17 +45,6 @@ def search_markers(sourcefile_arr, output_file, lock, nmarkers):
         del output
         del source
 
-
-def do_stuff(sourcefile, output_file, lock, nmarkers):
-    sourcefile = sourcefile.value.decode('utf-8')
-
-    lock.acquire()
-    with open(output_file.value.decode('utf-8'), 'a') as f:
-        f.write(sourcefile.split('/')[-1] + " ")
-        f.write(str(n))
-        f.write('\n')
-
-    lock.release()    
     
 if len(sys.argv) != 4:
     print(f"usage: {sys.argv[0]} <sources_file> <markers_file> <output_file> ")
@@ -65,7 +55,6 @@ _, sources_file, markers_file, output_file = sys.argv
 prefix = "/".join(sources_file.split('/')[:-1])
 with open(sources_file) as file:
     sourcefiles = [prefix + '/' + line.rstrip('\n') for line in file]
-print(sourcefiles)
 if len(sourcefiles) < 1:
     print("sources_file must have at least one source filepath")
     exit(1)
@@ -78,7 +67,10 @@ with open(markers_file) as file:
     markers = [line for line in csv.reader(file)]
 
 for idx, marker in markers:
-    markersids[marker] = int(idx)
+    if markersids.get(marker, None):
+        markersids[marker].append(int(idx))
+    else:
+        markersids[marker] = [int(idx)]
     kwtree.add(marker)
 
 kwtree.finalize()
@@ -96,7 +88,6 @@ out_file = mp.Value(ctypes.c_char_p, output_file)
 
 processes = []
 l = mp.Lock()
-start = time.time()
 
 n_threads = int(os.environ.get('PYPY_NUM_THREADS', 1))
 files_per_thread, files_left = len(sourcefiles) // n_threads, len(sourcefiles) % n_threads
@@ -104,8 +95,8 @@ files_per_thread, files_left = len(sourcefiles) // n_threads, len(sourcefiles) %
 for pr in range(n_threads):
     n_files = files_per_thread + 1 if files_left else files_per_thread
     files_left = max(files_left-1, 0)
-    # s_files = mp.Array(ctypes.c_char_p, n_files)
     s_files = []
+
     for f in range(n_files):
         try:
             f_name = sourcefiles.pop()
@@ -116,7 +107,5 @@ for pr in range(n_threads):
     new_process = mp.Process(target=search_markers, args=(s_files, out_file, l, n))
     processes.append(new_process)
 
-[pr.start() for pr in processes]
-[pr.join() for pr in processes]
-
-print(time.time() - start)
+for pr in processes: pr.start()
+for pr in processes: pr.join() 

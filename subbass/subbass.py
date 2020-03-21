@@ -28,8 +28,6 @@ with open(markers_file) as file:
     markers = [line for line in csv.reader(file)]
 
 for idx, marker in markers:
-    # markersids[marker] = int(idx)
-    print(idx, marker)
     if markersids.get(marker, None):
         markersids[marker].append(int(idx))
     else:
@@ -47,10 +45,8 @@ for sourcefile in sourcefiles:
 
     output = bytearray(len(markers))
     for string, _ in kwtree.search_all(source):
-        print(markersids[string])
         for mark_id in markersids[string]:
             output[mark_id - 1] = 0x01
-        # output[markersids[string]] = 0x01
 
     for idx in range(0, len(output)):
         output[idx] += ord('0')
