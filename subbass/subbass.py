@@ -29,11 +29,11 @@ with open(markers_file) as file:
 
 for idx, marker in markers:
     # markersids[marker] = int(idx)
+    print(idx, marker)
     if markersids.get(marker, None):
         markersids[marker].append(int(idx))
     else:
         markersids[marker] = [int(idx)]
-        
     kwtree.add(marker)
 
 kwtree.finalize()
@@ -47,8 +47,10 @@ for sourcefile in sourcefiles:
 
     output = bytearray(len(markers))
     for string, _ in kwtree.search_all(source):
-        for mark in markersids[string]:
-            output[markersids[mark]] = 0x01
+        print(markersids[string])
+        for mark_id in markersids[string]:
+            output[mark_id - 1] = 0x01
+        # output[markersids[string]] = 0x01
 
     for idx in range(0, len(output)):
         output[idx] += ord('0')
