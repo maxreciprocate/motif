@@ -9,15 +9,15 @@ const Root = 0x0
 
 mutable struct Vertex
     isroot::Bool
-    key::UInt32
     position::UInt32
+    keys::Vector{UInt32}
     suffix::Union{Nothing, Vertex}
     children::Vector{Union{Nothing, Vertex}}
 
-    Vertex() = new(false, 0, 0, nothing, Vector{Union{Nothing, Vertex}}(nothing, 4))
+    Vertex() = new(false, 0, [], nothing, Vector{Union{Nothing, Vertex}}(nothing, 4))
 end
 
-function add!(vx::Vertex, string, key::Int)
+function add!(vx::Vertex, string::SubString{String}, key::Int)
     for char in string
         if vx.children[T[char]] == nothing
             vx.children[T[char]] = Vertex()
@@ -26,7 +26,7 @@ function add!(vx::Vertex, string, key::Int)
         vx = vx.children[T[char]]
     end
 
-    vx.key = key
+    push!(vx.keys, key)
 end
 
 function search(vx::Vertex, char::UInt8)
@@ -74,7 +74,7 @@ function create(markersfn::String)
     enqueue!(queue, fsm)
     fsm.position = Root
 
-    table = ones(UInt32, 4 * (sumlengths+1))
+    table = zeros(UInt32, 4 * (sumlengths+1))
     words = Dict{UInt32, Vector{UInt32}}()
 
     edge = Root
@@ -89,9 +89,11 @@ function create(markersfn::String)
 
             evx = child
             while true
-                if evx.key != 0
+                if !isempty(evx.keys)
                     haskey(words, edge) || (words[edge] = Vector{UInt32}())
-                    push!(words[edge], evx.key)
+                    for word in evx.keys
+                        push!(words[edge], word)
+                    end
                 end
 
                 evx.isroot && break
@@ -107,7 +109,9 @@ function create(markersfn::String)
 end
 
 function match(sourcesfn::String, markersfn::String, outputfn::String)
+    buildstart = time()
     table, words, nmarkers = create(markersfn)
+    println("building took $(time() - buildstart)")
 
     prefixdir = join(split(sourcesfn, '/')[1:end-1], '/')
     outputf = open(outputfn, "w")
