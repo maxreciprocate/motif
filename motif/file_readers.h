@@ -4,6 +4,7 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
+#include <limits>
 
 #ifndef _FILE_READERS_H
 #define _FILE_READERS_H
