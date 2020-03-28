@@ -59,13 +59,14 @@ end
 function create(markersfn::String)
     fsm = Vertex()
     fsm.isroot = true
+    fsm.suffix = fsm
 
     markers = last.(split.(readlines(markersfn), ','))
-    sumlengths = 0x0
+    nchars  = 0
 
     for (idx, marker) in enumerate(markers)
         add!(fsm, marker, idx)
-        sumlengths += length(marker)
+        nchars += length(marker)
     end
 
     build!(fsm)
@@ -74,7 +75,8 @@ function create(markersfn::String)
     enqueue!(queue, fsm)
     fsm.position = Root
 
-    table = zeros(UInt32, 4 * (sumlengths+1))
+    tablesize = ceil(Int, nchars - length(markers) * log(4, length(markers) / √4) + 4)
+    table = zeros(UInt32, 4 * tablesize)
     words = Dict{UInt32, Vector{UInt32}}()
 
     edge = Root
@@ -84,7 +86,7 @@ function create(markersfn::String)
             enqueue!(queue, child)
 
             edge += 1
-            table[4 * vx.position + char] = edge
+            @inbounds table[4 * vx.position + char] = edge
             child.position = edge
 
             evx = child
@@ -101,7 +103,7 @@ function create(markersfn::String)
             end
 
         elseif vx.suffix != nothing
-            table[4 * vx.position + char] = search(vx.suffix, char).position
+            @inbounds table[4 * vx.position + char] = search(vx.suffix, char).position
         end
     end
 
@@ -109,9 +111,7 @@ function create(markersfn::String)
 end
 
 function match(sourcesfn::String, markersfn::String, outputfn::String)
-    buildstart = time()
     table, words, nmarkers = create(markersfn)
-    println("building took $(time() - buildstart)")
 
     prefixdir = join(split(sourcesfn, '/')[1:end-1], '/')
     outputf = open(outputfn, "w")
