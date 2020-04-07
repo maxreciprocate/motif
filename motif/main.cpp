@@ -81,10 +81,8 @@ int main(int argc, char** argv) {
     ) + markersData.sum_of_all_chars - std::floor(log_4_markers_size) * markers.size() + 3;
 
 
-    std::vector<std::array<uint32_t, MATRIX_WIDTH>> automaton(
-        max_states_num,
-        {0, 0, 0, 0}
-    );
+    std::vector<uint32_t> automaton((max_states_num + 1) << MATRIX_WIDTH_LEFT_SHIFT, 0);
+
     std::vector<std::vector<uint32_t>> output_links(max_states_num);
 
     create_automaton(markers, automaton, output_links);

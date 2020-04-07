@@ -9,7 +9,7 @@ all: main
 main:
 	mkdir -p build
 	cd build; CMake -DCMAKE_BUILD_TYPE=Release ..; make
-	./build/main $(genomes_path_file) $(markers_file) $(output_file) $(numbers_of_threads)
+	./build/main $(genomes_path_file) $(markers_file) $(output_file)
 
 clean:
 	rm -rf build

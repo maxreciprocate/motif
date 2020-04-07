@@ -1,3 +1,4 @@
+#include <sstream>
 #include "file_readers.h"
 
 markersData read_markers(std::ifstream &in, std::deque <std::string> &container) {
@@ -36,36 +37,47 @@ void read_genome_paths(std::ifstream &in, std::vector <std::deque<std::string>> 
     }
 }
 
-void read_genome_file(const std::string &file_name, std::string &container) {
-    std::ifstream in(file_name);
 
-    if (!in.good()) {
-        std::cerr << "Cannot read file: " << file_name << std::endl;
-        return;
-    }
+auto ignore_file(std::ifstream& in, const std::string_view& file_name) {
+  if (!in.good()) {
+    std::ostringstream msg;
+    msg << "Cannot read file: " << file_name;
+    throw std::runtime_error(msg.str());
+  }
 
-    auto const start_pos = in.tellg();
-    if (std::streamsize(-1) == start_pos) {
-        throw std::ios_base::failure{"error1"};
-    }
+  auto const start_pos = in.tellg();
 
-    if (!in.ignore(std::numeric_limits<std::streamsize>::max())) {
-        throw std::ios_base::failure{"error2"};
-    }
+  if (std::streamsize(-1) == start_pos) {
+    throw std::runtime_error("File stream is empty");
+  }
 
-    auto const char_count = in.gcount();
+  if (!in.ignore(std::numeric_limits<std::streamsize>::max())) {
+    throw std::runtime_error("Can't ignore() given file");
+  }
 
-    if (!in.seekg(start_pos)) {
-        throw std::ios_base::failure{"error3"};
-    }
+  auto const char_count = in.gcount();
 
-    container.resize(char_count);
+  if (!in.seekg(start_pos)) {
+    throw std::runtime_error("Can't go back to the begging of the file");
+  }
 
-    if (!container.empty()) {
-        if (!in.read(&container[0], container.size())) {
-            throw std::ios_base::failure{"error4"};
-        }
-    }
+  return char_count;
+}
 
-    in.close();
+void read_genome_file(const std::string& file_name, std::string &container) {
+  std::ifstream in(file_name, std::ifstream::binary);
+
+//  auto const char_count = ignore_file(in, file_name);
+  // get length of file:
+  in.seekg (0, in.end);
+  auto const char_count = in.tellg();
+  in.seekg (0, in.beg);
+
+  container.resize(char_count);
+
+  if (!in.read(container.data(), char_count)) {
+    throw std::runtime_error("Can't read file");
+  }
+
+  in.close();
 }
