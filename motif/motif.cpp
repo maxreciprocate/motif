@@ -1,5 +1,5 @@
 #include "motif.h"
-#include "file_readers.h"
+#include "src/readers/file_readers.h"
 
 uint8_t get_index_to_search(
     std::vector<uint32_t> &matrix,
@@ -156,7 +156,7 @@ void create_automaton(
 
 
 void match(
-    const std::string &source,
+    const std::string_view &source,
     const std::vector<uint32_t> &automaton,
     const std::vector<std::vector<uint32_t>> &output_links,
     std::string &result
@@ -186,32 +186,21 @@ void match(
     }
 }
 
-void match_genomes(
-    const std::deque<std::string> &genome_paths,
-    const std::string &f_genomes_path,
-    uint64_t markers_size,
-    const std::vector<uint32_t> &automaton,
-    const std::vector<std::vector<uint32_t>> &output_links,
-    std::mutex &file_write_mutex,
-    std::ofstream &output_file
-) {
-    std::string genome;
-    std::string result(markers_size, '0');
-
-    std::string path(f_genomes_path.substr(0, f_genomes_path.find_last_of('/') + 1));
-    for (const auto &genome_path: genome_paths) {
-        std::memset(result.data(), '0', markers_size);
-
-        read_genome_file(path + genome_path, genome);
-
-        match(genome, automaton, output_links, result);
-
-        {
-            std::lock_guard<std::mutex> lg{file_write_mutex};
-            output_file << genome_path.substr(genome_path.find_last_of('/') + 1, genome_path.size()) << ' ' << result
-                        << std::endl;
-        }
-
-
-    }
-}
+//void match_genome(
+//    const file_entry &genome,
+//    uint64_t markers_size,
+//    const std::vector<uint32_t> &automaton,
+//    const std::vector<std::vector<uint32_t>> &output_links,
+//    std::mutex &file_write_mutex,
+//    std::string& result,
+//    std::ofstream &output_file
+//) {
+//    std::memset(result.data(), '0', markers_size);
+//
+//    match(genome.content, automaton, output_links, result);
+//
+//    {
+//        std::lock_guard<std::mutex> lg{file_write_mutex};
+//        output_file << std::filesystem::path(genome.file_name).filename().c_str() << ' ' << result << std::endl;
+//    }
+//}

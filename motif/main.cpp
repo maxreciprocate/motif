@@ -5,7 +5,8 @@
 #include <thread>
 #include <mutex>
 #include "motif.h"
-#include "file_readers.h"
+#include "src/readers/file_readers.h"
+#include "src/queue/ConcurrentQueue.h"
 
 
 #define REQUIRED_ARGS_AMOUNT        4
@@ -27,7 +28,6 @@ inline long long to_us(const D& d) {
     return std::chrono::duration_cast<std::chrono::microseconds>(d).count();
 }
 
-
 int main(int argc, char** argv) {
     if (argc != REQUIRED_ARGS_AMOUNT) {
         std::cerr << "Wrong arguments amount (expected 4). Usage: \n"
@@ -40,22 +40,15 @@ int main(int argc, char** argv) {
 
     auto start = get_current_time_fenced();
 
-
     std::string f_genomes_path(argv[GENOMES_FILE_ARG]);
+
     // read genomes paths
-    std::ifstream f_genomes(f_genomes_path);
-    if (!f_genomes.is_open()) {
-        std::cerr << "Cannot read file: " << argv[GENOMES_FILE_ARG] << std::endl;
-        return 1;
-    }
-    std::vector<std::deque<std::string>> genomes_paths(threads_num);
-    read_genome_paths(f_genomes, genomes_paths);
+    std::vector<std::string> genomes_paths;
+    read_genome_paths(f_genomes_path, genomes_paths);
 
-    f_genomes.close();
-
+//    std::cout << genomes_paths[8] << std::endl;
 
     // read markers
-
     std::ifstream f_markers(argv[MARKERS_FILE_ARG]);
     if (!f_markers.good()) {
         std::cerr << "Cannot read file: " << argv[MARKERS_FILE_ARG] << std::endl;
@@ -93,42 +86,93 @@ int main(int argc, char** argv) {
 
 
     // find matches
-    start = get_current_time_fenced();
+    ConcurrentQueue<file_entry> reading_queue;
+    ConcurrentQueue<file_entry> writing_queue;
 
-    std::ofstream result(argv[OUTPUT_FILE_ARG]);
+    std::thread producer([&]() {
+        for (auto& file: genomes_paths) {
+            if (file.empty()) continue;
+            file_entry new_file_entry(file);
+            read_file(file, new_file_entry);
+            reading_queue.push(new_file_entry);
+        }
+        // add poisson pills
+        for (int i = 0; i < threads_num; ++i) {
+            file_entry poisson_pill;
+            reading_queue.push(poisson_pill);
+        }
+    });
 
-    if (!result.good()) {
+    // create consumers
+    std::vector<std::thread> threads;
+    threads.reserve(threads_num);
+    std::mutex file_write_mutex;
+    std::ofstream result_file(argv[OUTPUT_FILE_ARG]);
+
+    if (!result_file.good()) {
         std::cerr << "Cannot open file: " << argv[OUTPUT_FILE_ARG] << std::endl;
         return 1;
     }
 
-    std::vector<std::thread> threads_vector;
+    for (int i = 0; i < threads_num; ++i) {
+        threads.emplace_back(
+            [&, i]() {
 
-    std::mutex file_write_mutex;
+                auto new_file_entry = reading_queue.pop();
+                // die on poisson pill
+                while (!new_file_entry.file_name.empty()) {
 
-    for (uint8_t i = 0; i < threads_num; ++i) {
-        threads_vector.emplace_back(
-            match_genomes,
-            std::cref(genomes_paths[i]),
-            f_genomes_path,
-            markers.size(),
-            std::cref(automaton),
-            std::cref(output_links),
-            std::ref(file_write_mutex),
-            std::ref(result)
+                    file_entry result_file_entry(new_file_entry.file_name.data());
+                    result_file_entry.content.resize(markers.size());
+
+                    std::memset(result_file_entry.content.data(), '0', markers.size());
+
+                    match(
+                        new_file_entry.content,
+                        automaton,
+                        output_links,
+                        result_file_entry.content
+                    );
+
+
+                    writing_queue.push(result_file_entry);
+
+                    std::cout << " analyzed " << new_file_entry.file_name << std::endl;
+
+                    new_file_entry = reading_queue.pop();
+                }
+                file_entry poisson_pill("");
+                writing_queue.push(poisson_pill);
+                std::cout << "thread " << i << " is closing " << std::endl;
+            }
         );
     }
 
+    // create saver
+    auto poisson_pills_counter = 0;
+    std::thread saver([&]() {
 
 
-    for (auto& thread_: threads_vector) {
-        thread_.join();
+        while (poisson_pills_counter != threads_num) {
+            auto new_file_entry = writing_queue.pop();
+            if (new_file_entry.file_name.empty()) {
+                poisson_pills_counter++;
+            } else {
+                std::cout << "Saved " << new_file_entry.file_name << std::endl;
+                result_file << std::filesystem::path(new_file_entry.file_name).filename().c_str() << ' ' << new_file_entry.content << std::endl;
+            }
+        }
+    });
+    // close all threads
+    producer.join();
+    for (auto& th: threads) {
+        th.join();
     }
+    saver.join();
+    result_file.close();
 
-    result.close();
     end = get_current_time_fenced();
 
     std::cout << "Genomes analized: " << to_us(end - start) << std::endl;
-
     return 0;
 }

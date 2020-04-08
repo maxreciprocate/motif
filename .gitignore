@@ -2,6 +2,7 @@ build/
 .idea/
 .ccls-cache/
 cmake-build-debug/
+instrumentscli*
 
 *.ipynb
 *.ipynb_checkpoints
