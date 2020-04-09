@@ -137,13 +137,13 @@ int main(int argc, char** argv) {
 
                     writing_queue.push(result_file_entry);
 
-                    std::cout << " analyzed " << new_file_entry.file_name << std::endl;
+//                    std::cout << " analyzed " << new_file_entry.file_name << std::endl;
 
                     new_file_entry = reading_queue.pop();
                 }
                 file_entry poisson_pill("");
                 writing_queue.push(poisson_pill);
-                std::cout << "thread " << i << " is closing " << std::endl;
+//                std::cout << "thread " << i << " is closing " << std::endl;
             }
         );
     }
@@ -158,7 +158,7 @@ int main(int argc, char** argv) {
             if (new_file_entry.file_name.empty()) {
                 poisson_pills_counter++;
             } else {
-                std::cout << "Saved " << new_file_entry.file_name << std::endl;
+//                std::cout << "Saved " << new_file_entry.file_name << std::endl;
                 result_file << std::filesystem::path(new_file_entry.file_name).filename().c_str() << ' ' << new_file_entry.content << std::endl;
             }
         }
