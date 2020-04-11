@@ -1,9 +1,5 @@
-//
-// Created by Denys Maletsden on 08.04.2020.
-//
+#pragma once
 
-#ifndef _CONCURRENTQUEUE_H
-#define _CONCURRENTQUEUE_H
 #include <iostream>
 #include <thread>
 #include <vector>
@@ -11,6 +7,7 @@
 #include <queue>
 #include <mutex>
 #include <condition_variable>
+#include <atomic>
 
 #include "../readers/archive_reader.h"
 #include "../readers/file_readers.h"
@@ -63,5 +60,3 @@ public:
         cv.notify_one();
     }
 };
-
-#endif //_CONCURRENTQUEUE_H

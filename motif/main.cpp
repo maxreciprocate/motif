@@ -4,17 +4,16 @@
 #include <cmath>
 #include <thread>
 #include <mutex>
+#include <cstring>
 #include "motif.h"
 #include "src/readers/file_readers.h"
 #include "src/queue/ConcurrentQueue.h"
-
 
 #define REQUIRED_ARGS_AMOUNT        4
 #define GENOMES_FILE_ARG            1
 #define MARKERS_FILE_ARG            2
 #define OUTPUT_FILE_ARG             3
 #define THREAD_NUM_ARG              4
-
 
 inline std::chrono::high_resolution_clock::time_point get_current_time_fenced() {
     std::atomic_thread_fence(std::memory_order_seq_cst);
@@ -24,8 +23,8 @@ inline std::chrono::high_resolution_clock::time_point get_current_time_fenced() 
 }
 
 template<class D>
-inline long long to_us(const D& d) {
-    return std::chrono::duration_cast<std::chrono::microseconds>(d).count();
+inline long long to_ms(const D& d) {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(d).count();
 }
 
 int main(int argc, char** argv) {
@@ -46,8 +45,6 @@ int main(int argc, char** argv) {
     std::vector<std::string> genomes_paths;
     read_genome_paths(f_genomes_path, genomes_paths);
 
-//    std::cout << genomes_paths[8] << std::endl;
-
     // read markers
     std::ifstream f_markers(argv[MARKERS_FILE_ARG]);
     if (!f_markers.good()) {
@@ -62,7 +59,7 @@ int main(int argc, char** argv) {
 
     auto end = get_current_time_fenced();
 
-    std::cout << "Files read: " << to_us(end - start) << std::endl;
+    std::cout << "Files read: " << to_ms(end - start) << std::endl;
 
 
     start = get_current_time_fenced();
@@ -82,8 +79,7 @@ int main(int argc, char** argv) {
 
     end = get_current_time_fenced();
 
-    std::cout << "Automaton created: " << to_us(end - start) << std::endl;
-
+    std::cout << "Automaton created: " << to_ms(end - start) << std::endl;
 
     // find matches
     ConcurrentQueue<file_entry> reading_queue;
@@ -136,14 +132,10 @@ int main(int argc, char** argv) {
 
 
                     writing_queue.push(result_file_entry);
-
-//                    std::cout << " analyzed " << new_file_entry.file_name << std::endl;
-
                     new_file_entry = reading_queue.pop();
                 }
                 file_entry poisson_pill("");
                 writing_queue.push(poisson_pill);
-//                std::cout << "thread " << i << " is closing " << std::endl;
             }
         );
     }
@@ -151,28 +143,26 @@ int main(int argc, char** argv) {
     // create saver
     auto poisson_pills_counter = 0;
     std::thread saver([&]() {
-
-
         while (poisson_pills_counter != threads_num) {
             auto new_file_entry = writing_queue.pop();
             if (new_file_entry.file_name.empty()) {
                 poisson_pills_counter++;
             } else {
-//                std::cout << "Saved " << new_file_entry.file_name << std::endl;
                 result_file << std::filesystem::path(new_file_entry.file_name).filename().c_str() << ' ' << new_file_entry.content << std::endl;
             }
         }
     });
+
     // close all threads
     producer.join();
-    for (auto& th: threads) {
+    for (auto& th: threads)
         th.join();
-    }
+
     saver.join();
     result_file.close();
 
     end = get_current_time_fenced();
 
-    std::cout << "Genomes analized: " << to_us(end - start) << std::endl;
+    std::cout << "Genomes analyzed: " << to_ms(end - start) << std::endl;
     return 0;
 }

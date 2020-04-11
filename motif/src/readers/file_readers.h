@@ -6,6 +6,9 @@
 #include <iostream>
 #include <fstream>
 #include <limits>
+#include <algorithm>
+#include <filesystem>
+#include <memory>
 
 #include "archive_reader.h"
 #ifndef _FILE_READERS_H
