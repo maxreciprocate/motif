@@ -1,13 +1,14 @@
 #include <sstream>
 #include "file_readers.h"
 
-markersData read_markers(std::ifstream &in, std::deque<std::string> &container) {
+MARKERS_DATA read_markers(std::ifstream &in) {
     uint64_t sum_of_all_chars = 0;
     uint32_t longest_marker_len = 0;
     std::string line;
 
+    MARKERS_DATA markersData{};
     while (std::getline(in, line)) {
-        container.emplace_back(
+        markersData.markers.emplace_back(
             line.begin() + line.find(',') + 1, line.end()
         );
 
@@ -15,10 +16,10 @@ markersData read_markers(std::ifstream &in, std::deque<std::string> &container) 
         sum_of_all_chars += line.size();
     }
 
-    return {
-        .sum_of_all_chars = sum_of_all_chars,
-        .longest_marker_len = longest_marker_len
-    };
+    markersData.sum_of_all_chars = sum_of_all_chars;
+    markersData.longest_marker_len = longest_marker_len;
+
+    return markersData;
 }
 
 void read_genome_paths(const std::string &file_name, std::vector<std::string> &container) {

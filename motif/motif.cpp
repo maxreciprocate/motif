@@ -18,12 +18,17 @@ uint8_t get_index_to_search(
     throw std::runtime_error("Huge problem");
 }
 
-
-void create_automaton(
-    const std::deque<std::string> &markers,
-    std::vector<uint32_t> &matrix,
-    std::vector<std::vector<uint32_t>> &output_links
+uint64_t create_goto(
+    const MARKERS_DATA &markersData,
+    AUTOMATON &matrix_goto
 ) {
+    auto& markers = markersData.markers;
+    auto log_4_markers_size = std::log(markers.size()) / std::log(4);
+
+    uint32_t max_states_num = (
+        (std::pow(4, std::ceil(log_4_markers_size)) - 1) / (4 - 1)
+    ) + markersData.sum_of_all_chars - std::floor(log_4_markers_size) * markers.size() + 3;
+
     std::array<uint8_t, static_cast<uint8_t>('A') + 1 + ALPHABET_SIZE> to_index{};
 
     to_index['A'] = 0;
@@ -31,11 +36,12 @@ void create_automaton(
     to_index['G'] = 2;
     to_index['C'] = 3;
 
-    std::vector<uint32_t> fail_links(matrix.size(), 0);
 
     // create goto
     uint32_t cur_state, next_states = 2;
     uint32_t marker_index = 0;
+    std::vector<uint32_t> matrix((max_states_num + 1) << MATRIX_WIDTH_LEFT_SHIFT, 0);
+    std::vector<std::vector<uint32_t>> output_links(max_states_num);
     for (auto it = markers.cbegin(); it != markers.cend(); ++it, ++marker_index) {
         cur_state = START_STATE;
 
@@ -43,9 +49,7 @@ void create_automaton(
 
         for (auto chr: marker) {
             if (!matrix[(cur_state << MATRIX_WIDTH_LEFT_SHIFT) + to_index[chr]]) {
-                matrix[(cur_state << MATRIX_WIDTH_LEFT_SHIFT) + to_index[chr]] = next_states;
-
-                next_states++;
+                matrix[(cur_state << MATRIX_WIDTH_LEFT_SHIFT) + to_index[chr]] = next_states++;
             }
             cur_state = matrix[(cur_state << MATRIX_WIDTH_LEFT_SHIFT) + to_index[chr]];
         }
@@ -58,15 +62,76 @@ void create_automaton(
 
     }
 
+    matrix_goto.automaton = matrix;
+    matrix_goto.output_links = output_links;
 
+    return next_states;
+}
+
+AUTOMATON create_double_build(
+    const AUTOMATON &matrix_goto,
+    const uint64_t num_states
+) {
+
+    std::vector<uint32_t> matrix(num_states << MATRIX_WIDTH_LEFT_SHIFT, 0);
+    std::vector<uint32_t> queue;
+    queue.reserve(num_states);
+
+    auto& matrix__goto = matrix_goto.automaton;
+
+    queue[START_STATE] = START_STATE;
+    uint32_t current_state_index = 2;
+    for (uint32_t state_index = START_STATE; state_index < num_states; ++state_index) {
+        auto current_state = queue[state_index];
+
+        for (uint8_t state = 0; state < AUTOMATON_WIDTH; ++state) {
+            auto child_state = matrix__goto[(current_state << MATRIX_WIDTH_LEFT_SHIFT) + state];
+            if (child_state) {
+                matrix[(state_index << MATRIX_WIDTH_LEFT_SHIFT) + state] = current_state_index;
+                queue[current_state_index++] = child_state;
+            }
+        }
+
+
+    }
+
+    // set links to root node for root node's children
     for (uint8_t state = 0; state < AUTOMATON_WIDTH; ++state) {
         if (!matrix[(START_STATE << MATRIX_WIDTH_LEFT_SHIFT) + state]) {
             matrix[(START_STATE << MATRIX_WIDTH_LEFT_SHIFT) + state] = START_STATE;
         }
     }
 
+    // update output links
+    std::vector<std::vector<uint32_t>> output_links(num_states);
+
+    auto& goto_output_links = matrix_goto.output_links;
+    for (uint32_t j = START_STATE; j < num_states; ++j) {
+        output_links[j] = goto_output_links[queue[j]];
+    }
+
+    return {
+        .automaton = matrix,
+        .output_links = output_links
+    };
+}
+
+AUTOMATON create_automaton(
+    const MARKERS_DATA &markersData
+) {
+
+    // create goto
+    AUTOMATON matrix_goto{};
+    const uint64_t num_states = create_goto(markersData, matrix_goto);
+
+    // double-build
+    AUTOMATON automaton = create_double_build(matrix_goto, num_states);
+
+    auto& matrix = automaton.automaton;
+    auto& output_links = automaton.output_links;
 
     // create fail links
+    std::vector<uint32_t> fail_links(num_states, 0);
     std::queue<uint32_t> states_queue;
 
     for (uint8_t state = 0; state < AUTOMATON_WIDTH; ++state) {
@@ -152,6 +217,8 @@ void create_automaton(
             }
         }
     }
+
+    return automaton;
 }
 
 

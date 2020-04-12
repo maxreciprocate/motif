@@ -51,8 +51,8 @@ int main(int argc, char** argv) {
         std::cerr << "Cannot read file: " << argv[MARKERS_FILE_ARG] << std::endl;
         return 1;
     }
-    std::deque<std::string> markers;
-    const auto markersData = read_markers(f_markers, markers);
+
+    const MARKERS_DATA markersData = read_markers(f_markers);
 
     f_markers.close();
 
@@ -64,18 +64,7 @@ int main(int argc, char** argv) {
 
     start = get_current_time_fenced();
 
-    auto log_4_markers_size = std::log(markers.size()) / std::log(4);
-
-    uint32_t max_states_num = (
-          (std::pow(4, std::ceil(log_4_markers_size)) - 1) / (4 - 1)
-    ) + markersData.sum_of_all_chars - std::floor(log_4_markers_size) * markers.size() + 3;
-
-
-    std::vector<uint32_t> automaton((max_states_num + 1) << MATRIX_WIDTH_LEFT_SHIFT, 0);
-
-    std::vector<std::vector<uint32_t>> output_links(max_states_num);
-
-    create_automaton(markers, automaton, output_links);
+    const AUTOMATON automaton = create_automaton(markersData);
 
     end = get_current_time_fenced();
 
@@ -119,14 +108,14 @@ int main(int argc, char** argv) {
                 while (!new_file_entry.file_name.empty()) {
 
                     file_entry result_file_entry(new_file_entry.file_name.data());
-                    result_file_entry.content.resize(markers.size());
+                    result_file_entry.content.resize(markersData.markers.size());
 
-                    std::memset(result_file_entry.content.data(), '0', markers.size());
+                    std::memset(result_file_entry.content.data(), '0', markersData.markers.size());
 
                     match(
                         new_file_entry.content,
-                        automaton,
-                        output_links,
+                        automaton.automaton,
+                        automaton.output_links,
                         result_file_entry.content
                     );
 

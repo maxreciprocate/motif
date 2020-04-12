@@ -22,6 +22,12 @@
 #define MOTIF
 
 #include "src/readers/archive_reader.h"
+#include "src/readers/file_readers.h"
+struct AUTOMATON {
+    std::vector<uint32_t> automaton;
+    std::vector<std::vector<uint32_t>> output_links;
+};
+
 void match(
     const std::string_view &source,
     const std::vector<uint32_t>& automaton,
@@ -29,10 +35,8 @@ void match(
     std::string &result
 );
 
-void create_automaton(
-    const std::deque<std::string> &markers,
-    std::vector<uint32_t> &matrix,
-    std::vector<std::vector<uint32_t>> &output_links
+AUTOMATON create_automaton(
+    const MARKERS_DATA &markersData
 );
 
 //

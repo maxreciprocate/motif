@@ -14,12 +14,14 @@
 #ifndef _FILE_READERS_H
 #define _FILE_READERS_H
 
-struct markersData {
+
+struct MARKERS_DATA {
     uint64_t sum_of_all_chars;
     uint32_t longest_marker_len;
+    std::deque<std::string> markers;
 };
 
-markersData read_markers(std::ifstream &in, std::deque<std::string> &container);
+MARKERS_DATA read_markers(std::ifstream &in);
 
 void read_genome_paths(const std::string &file_name, std::vector<std::string> &container);
 
