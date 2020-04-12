@@ -1,10 +1,32 @@
-#include "src/readers/file_readers.h"
 #include "stdio.h"
 #include "string.h"
 #include <array>
 #include <cmath>
 #include <vector>
 #include <unordered_map>
+#include <fstream>
+#include <filesystem>
+#include <string>
+#include <iostream>
+#include <algorithm>
+
+void readfile(const std::string& filename, std::string& container) {
+  std::ifstream file(filename, std::ifstream::binary);
+
+  if (!file.good())
+    throw std::runtime_error("cannot open file");
+
+  file.seekg(0, file.end);
+  const auto nchars = file.tellg();
+  file.seekg(0, file.beg);
+
+  container.resize(nchars);
+
+  if (!file.read(&container[0], nchars))
+    throw std::runtime_error("cannot read file");
+
+  file.close();
+}
 
 const std::array<uint8_t, 85> Lut = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -66,15 +88,22 @@ __global__ void match(uint32_t *d_table, char *d_source, uint32_t size,
 }
 
 int main(int argc, char **argv) {
+  if (argc < 4) {
+    fprintf(stderr, "usage: %s <file_with_genome_filepaths> <file_with_markers> <output_file>\n", argv[0]);
+    return 1;
+  }
+
+  std::vector<std::string> sources;
   std::ifstream sourcesf(argv[1]);
   if (!sourcesf) {
     fprintf(stderr, "there is no %s to open\n", argv[1]);
     return 1;
   }
 
-  std::vector<std::deque<std::string>> sources(1);
+  std::string line;
+  while (std::getline(sourcesf, line))
+    sources.push_back(line);
 
-  read_genome_paths(sourcesf, sources);
   sourcesf.close();
 
   std::ifstream markersf(argv[2]);
@@ -83,13 +112,17 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  std::deque<std::string> markers;
-  auto markersdata = read_markers(markersf, markers);
+  std::vector<std::string> markers;
+  uint64_t nchars = 0;
+  while (std::getline(markersf, line)) {
+    markers.emplace_back(line.begin() + line.find(',') + 1, line.end());
+
+    nchars += line.size();
+  }
+
   markersf.close();
 
-  uint32_t tablesize = std::ceil(
-      markersdata.sum_of_all_chars -
-      1/2 * markers.size() * std::log2(markers.size() / std::sqrt(4)) + 24);
+  uint32_t tablesize = std::ceil(nchars - 1/2 * markers.size() * std::log2(markers.size() / std::sqrt(4)) + 24);
 
   std::vector<uint32_t> table(tablesize * 5, 0);
 
@@ -149,8 +182,8 @@ int main(int argc, char **argv) {
   std::vector<uint8_t> output(markers.size(), 0x30);
   cudaMalloc((void **)&d_output, output.size());
 
-  for (std::string &sourcefn : sources[0]) {
-    read_genome_file(prefix + sourcefn, source);
+  for (std::string &sourcefn : sources) {
+    readfile(prefix + sourcefn, source);
 
     cudaMemcpy(d_source, source.data(), source.size(), cudaMemcpyHostToDevice);
 
