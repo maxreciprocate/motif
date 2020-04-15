@@ -37,8 +37,6 @@ int main(int argc, char** argv) {
 
     const uint8_t threads_num = 4;
 
-    auto start = get_current_time_fenced();
-
     std::string f_genomes_path(argv[GENOMES_FILE_ARG]);
 
     // read genomes paths
@@ -55,20 +53,7 @@ int main(int argc, char** argv) {
     const MARKERS_DATA markersData = read_markers(f_markers);
 
     f_markers.close();
-
-
-    auto end = get_current_time_fenced();
-
-    std::cout << "Files read: " << to_ms(end - start) << std::endl;
-
-
-    start = get_current_time_fenced();
-
     const AUTOMATON automaton = create_automaton(markersData);
-
-    end = get_current_time_fenced();
-
-    std::cout << "Automaton created: " << to_ms(end - start) << std::endl;
 
     // find matches
     ConcurrentQueue<file_entry> reading_queue;
@@ -150,8 +135,5 @@ int main(int argc, char** argv) {
     saver.join();
     result_file.close();
 
-    end = get_current_time_fenced();
-
-    std::cout << "Genomes analyzed: " << to_ms(end - start) << std::endl;
     return 0;
 }

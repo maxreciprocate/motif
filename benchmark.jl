@@ -1,13 +1,8 @@
 #!/usr/bin/env julia
-using Plots
-using Dates: today
-
 contenders = [
+    ("bassline", "bassline/double-build.jl"),
     ("groove", "motif/build/groove"),
-    ("subbass", "subbass/subbass.py"),
-    ("subbass_parallel", "subbass/subbass_parallel.py"),
-    ("bassline", "bassline/bassline.jl"),
-    ("bassline-double-build", "bassline/double-build.jl"),
+    ("jam", "jam/jam")
 ]
 
 chmod.(last.(contenders), 0o777)
@@ -21,17 +16,17 @@ function benchmark(sources::Vector{String})
     timings = zeros(length(contenders))
 
     for (idx, (name, exe)) in enumerate(contenders)
-        println("running $name...")
         start = time()
         run(`./$exe $(sources[1]) $(sources[2]) output-$idx.txt`)
-        timings[idx] = time() - start
-        println(timings[idx])
+        timings[idx] = round(time() - start; digits=2)
+
+        println("$name = $(timings[idx])")
     end
 
     output1 = Dict{String, String}()
     for line in readlines("output-1.txt")
-        genome, presence = split(line, ' ')
-        output1[genome] = presence
+        genome, string = split(line, ' ')
+        output1[genome] = string
     end
 
     for idx in 2:length(contenders)
@@ -51,7 +46,7 @@ function benchmark(sources::Vector{String})
         output1 = output2
     end
 
-    println("all the contenders agree")
+    println("all contenders agree")
 
     timings
 end
@@ -81,17 +76,6 @@ ENV["JULIA_NUM_THREADS"] = ENV["PYPY_NUM_THREADS"] = 4
 
 results = benchmark.(benchmarks)
 
-plot(dpi=200)
-
 for (idx, timings) in enumerate(eachrow(hcat(results...)))
-    plot!(timings, label=first(contenders[idx]), legend=:topleft)
-    println(timings)
+    println("$(first(contenders[idx])) = $timings")
 end
-
-nbenchs = size(results)[1]
-xticks!([1:nbenchs;], ["$(10^i),$(10^i * 8000)" for i in 0:nbenchs-1])
-ylabel!("seconds")
-commit = read(`git rev-parse HEAD`, String)
-title!("$(today()) $(commit[1:10])")
-xlabel!("genomes & markers")
-savefig("timings.png")

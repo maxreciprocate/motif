@@ -1,7 +1,15 @@
-all: bench-10
+all: bench-100
 
-bench-%: data-%
+bench-%: data-% jam groove
 	julia benchmark.jl $*
+
+jam:
+	$(MAKE) clean -C jam
+	$(MAKE) -C jam
+
+groove:
+	$(MAKE) clean -C motif
+	$(MAKE) -C motif
 
 data-%:
 	$(MAKE) $@ -C data

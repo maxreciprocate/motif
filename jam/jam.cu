@@ -1,16 +1,40 @@
 #include "stdio.h"
 #include "string.h"
 #include <array>
+#include <atomic>
+#include <chrono>
 #include <cmath>
-#include <vector>
-#include <unordered_map>
 #include <fstream>
-#include <filesystem>
-#include <string>
 #include <iostream>
-#include <algorithm>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
-void readfile(const std::string& filename, std::string& container) {
+#define debug
+
+struct measurer {
+  std::string subject;
+  std::chrono::high_resolution_clock::time_point start;
+
+  measurer(const std::string &name)
+      : subject(name), start(std::chrono::high_resolution_clock::now()) {}
+  ~measurer() {
+    auto difference = std::chrono::high_resolution_clock::now() - start;
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(difference)
+            .count();
+
+    printf("%s: %.3f\n", subject.c_str(), static_cast<double>(duration) / 1000);
+  }
+};
+
+#ifdef debug
+#define measure(name) measurer __measurer(name);
+#else
+#define measure(name) {};
+#endif
+
+inline void readfile(const std::string &filename, std::string &container) {
   std::ifstream file(filename, std::ifstream::binary);
 
   if (!file.good())
@@ -89,7 +113,10 @@ __global__ void match(uint32_t *d_table, char *d_source, uint32_t size,
 
 int main(int argc, char **argv) {
   if (argc < 4) {
-    fprintf(stderr, "usage: %s <file_with_genome_filepaths> <file_with_markers> <output_file>\n", argv[0]);
+    fprintf(stderr,
+            "usage: %s <file_with_genome_filepaths> <file_with_markers> "
+            "<output_file>\n",
+            argv[0]);
     return 1;
   }
 
@@ -122,17 +149,19 @@ int main(int argc, char **argv) {
 
   markersf.close();
 
-  uint32_t tablesize = std::ceil(nchars - 1/2 * markers.size() * std::log2(markers.size() / std::sqrt(4)) + 24);
+  uint32_t tablesize = std::ceil(
+      nchars -
+      1 / 2 * markers.size() * std::log2(markers.size() / std::sqrt(4)) + 24);
 
   std::vector<uint32_t> table(tablesize * 5, 0);
 
   uint32_t edge = 0;
   uint32_t wordidx = 0;
 
-  std::unordered_map<uint32_t, std::vector<uint32_t> > duplicates;
+  std::unordered_map<uint32_t, std::vector<uint32_t>> duplicates;
   std::unordered_map<std::string, uint32_t> marked_mapping;
 
-  for (const auto& marker: markers) {
+  for (const auto &marker : markers) {
     uint32_t vx = 0;
 
     for (auto &base : marker) {
@@ -183,30 +212,44 @@ int main(int argc, char **argv) {
   cudaMalloc((void **)&d_output, output.size());
 
   for (std::string &sourcefn : sources) {
-    readfile(prefix + sourcefn, source);
+    {
+      measure("reading");
+      readfile(prefix + sourcefn, source);
+    }
 
-    cudaMemcpy(d_source, source.data(), source.size(), cudaMemcpyHostToDevice);
+    {
+      measure("working");
+      cudaMemcpy(d_source, source.data(), source.size(),
+                 cudaMemcpyHostToDevice);
 
-    uint32_t size = source.size();
+      cudaMemcpy(d_output, output.data(), output.size(),
+                 cudaMemcpyHostToDevice);
+      match<<<8000, 1024>>>(d_table, d_source, source.size(), d_lut, d_output);
 
-    cudaMemcpy(d_output, output.data(), output.size(), cudaMemcpyHostToDevice);
-    match<<<8000, 1024>>>(d_table, d_source, size, d_lut, d_output);
+      cudaMemcpy(output.data(), d_output, output.size(),
+                 cudaMemcpyDeviceToHost);
+    }
 
-    cudaMemcpy(output.data(), d_output, output.size(), cudaMemcpyDeviceToHost);
-
-    for (const auto& pair: duplicates) {
-      if (output[pair.first - 1] == 0x31) {
-        for (const auto &idx : pair.second)
-          output[idx - 1] = 0x31;
+    {
+      measure("processing");
+      for (const auto &pair : duplicates) {
+        if (output[pair.first - 1] == 0x31) {
+          for (const auto &idx : pair.second)
+            output[idx - 1] = 0x31;
+        }
       }
     }
 
-    outputf << sourcefn.substr(sourcefn.find_last_of('/') + 1, sourcefn.size())
-            << ' ';
-    outputf.write((char *) output.data(), output.size());
-    outputf << std::endl;
+    {
+      measure("writing");
+      outputf << sourcefn.substr(sourcefn.find_last_of('/') + 1,
+                                 sourcefn.size())
+              << ' ';
+      outputf.write((char *)output.data(), output.size());
+      outputf << std::endl;
 
-    std::fill(output.begin(), output.end(), 0x30);
+      std::fill(output.begin(), output.end(), 0x30);
+    }
   }
 
   outputf.close();
