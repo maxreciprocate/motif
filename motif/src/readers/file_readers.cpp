@@ -41,7 +41,11 @@ void read_genome_paths(const std::string &file_name, std::vector<std::string> &c
         to = container_str.find_first_of(new_line_delimiter, ++from);
 
 
-        std::string genome_path = path + std::string(container_str, from, to - from);
+        std::string genome_path(container_str, from, to - from);
+
+        if (genome_path.empty()) continue;
+
+        genome_path = path + genome_path;
 
         container.emplace_back(
             std::move(genome_path)
@@ -51,9 +55,14 @@ void read_genome_paths(const std::string &file_name, std::vector<std::string> &c
     }
 
     ++from;
-    container.emplace_back(
-        container_str, from, container.size() - from
-    );
+    std::string genome_path(container_str, from, container_str.size() - from);
+    if (!genome_path.empty()) {
+        genome_path = path + genome_path;
+
+        container.emplace_back(
+            std::move(genome_path)
+        );
+    }
 }
 
 

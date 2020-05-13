@@ -1,6 +1,21 @@
 #!/usr/bin/env julia
 using Test
 
+test_genome = "./tests/data/pseudo139.fasta"
+test_markers_set = [
+    "./data/8000markers.csv",
+    "./data/80000markers.csv",
+    "./data/800000markers.csv",
+    "./data/8000000markers.csv"
+]
+
+test_results_set = [
+    "./tests/data/result8000.txt",
+    "./tests/data/result80000.txt",
+    "./tests/data/result800000.txt",
+    "./tests/data/result8000000.txt",
+]
+
 if length(ARGS) != 1
     println("usage: julia test.jl <path to an executable>")
     exit(1)
@@ -30,6 +45,15 @@ function match(source::String, markers::Vector{String})
     return last(split(readline(outputfn), ' '))
 end
 
+function read_markers(source::String)
+    return map((line) -> line[findfirst(isequal(','), line) + 1:length(line)], readlines(source))
+end
+
+function read_result(source::String)
+    result = readline(source)
+    return result[findfirst(isequal(' '), result) + 1: length(result)]
+end
+
 try
     match("A", ["A"])
 catch e
@@ -53,7 +77,6 @@ end
         @test match("ACTTTTTTCG", ["A", "C", "G"]) == "111"
         @test match("GCTTTTTTCG", ["T", "G", "C", "A"]) == "1110"
     end
-
     @testset "handling breaks" begin
         @test match("ACNNNA", ["ACA", "AC"]) == "01"
         @test match("NNNNNN", ["ACA", "AC"]) == "00"
@@ -101,5 +124,11 @@ end
         @test match("ACCCA", ["ACCCA", "ACCCA", "A", "ACCA", "TG"]) == "11100"
         @test match("GGGGG", ["GG", "GG", "GGG", "GGGGG", "GGGGG", "GGGGGG"]) == "111110"
         @test match("AGGGGGANA", ["GGGG", "AG", "GAA", "GA", "GGGG", "GAA", "GGGG"]) == "1101101"
+    end
+
+    @testset "real genome and real markers" begin
+        for i in 1:2
+            @test match(readline(test_genome), read_markers(test_markers_set[i])) == read_result(test_results_set[i])
+        end
     end
 end

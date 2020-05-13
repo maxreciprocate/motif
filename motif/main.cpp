@@ -61,7 +61,6 @@ int main(int argc, char** argv) {
 
     std::thread producer([&]() {
         for (auto& file: genomes_paths) {
-            if (file.empty()) continue;
             file_entry new_file_entry(file);
             read_file(file, new_file_entry);
             reading_queue.push(new_file_entry);
@@ -103,7 +102,6 @@ int main(int argc, char** argv) {
                         automaton.output_links,
                         result_file_entry.content
                     );
-
 
                     writing_queue.push(result_file_entry);
                     new_file_entry = reading_queue.pop();

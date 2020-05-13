@@ -8,4 +8,4 @@ find_package(Threads REQUIRED)
 
 add_executable(groove main.cpp motif.cpp src/readers/file_readers.cpp src/readers/file_readers.cpp src/queue/ConcurrentQueue.h)
 
-target_link_libraries(groove Threads::Threads stdc++fs)
+target_link_libraries(groove Threads::Threads)

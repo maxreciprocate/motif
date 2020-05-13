@@ -42,10 +42,9 @@ uint64_t create_goto(
     uint32_t marker_index = 0;
     std::vector<uint32_t> matrix((max_states_num + 1) << MATRIX_WIDTH_LEFT_SHIFT, 0);
     std::vector<std::vector<uint32_t>> output_links(max_states_num);
-    for (auto it = markers.cbegin(); it != markers.cend(); ++it, ++marker_index) {
-        cur_state = START_STATE;
 
-        auto &marker = *it;
+    for (auto &marker: markers) {
+        cur_state = START_STATE;
 
         for (auto chr: marker) {
             if (!matrix[(cur_state << MATRIX_WIDTH_LEFT_SHIFT) + to_index[chr]]) {
@@ -55,11 +54,10 @@ uint64_t create_goto(
         }
 
         if (output_links[cur_state].empty()) {
-            output_links[cur_state] = {marker_index};
+            output_links[cur_state] = {marker_index++};
         } else {
-            output_links[cur_state].push_back(marker_index);
+            output_links[cur_state].push_back(marker_index++);
         }
-
     }
 
     matrix_goto.automaton = matrix;
@@ -252,22 +250,3 @@ void match(
         }
     }
 }
-
-//void match_genome(
-//    const file_entry &genome,
-//    uint64_t markers_size,
-//    const std::vector<uint32_t> &automaton,
-//    const std::vector<std::vector<uint32_t>> &output_links,
-//    std::mutex &file_write_mutex,
-//    std::string& result,
-//    std::ofstream &output_file
-//) {
-//    std::memset(result.data(), '0', markers_size);
-//
-//    match(genome.content, automaton, output_links, result);
-//
-//    {
-//        std::lock_guard<std::mutex> lg{file_write_mutex};
-//        output_file << std::filesystem::path(genome.file_name).filename().c_str() << ' ' << result << std::endl;
-//    }
-//}
