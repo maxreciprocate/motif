@@ -5,6 +5,7 @@ VERYSMALL = $(filter-out 100genomes.txt, $(SMALL))
 
 data-10: $(VERYSMALL) $(MARKERS)
 data-100: $(SMALL) $(MARKERS)
+data-1000: all
 
 all: $(GENOMES) $(MARKERS)
 

@@ -1,21 +1,6 @@
 #!/usr/bin/env julia
 using Test
 
-test_genome = "./tests/data/pseudo139.fasta"
-test_markers_set = [
-    "./data/8000markers.csv",
-    "./data/80000markers.csv",
-    "./data/800000markers.csv",
-    "./data/8000000markers.csv"
-]
-
-test_results_set = [
-    "./tests/data/result8000.txt",
-    "./tests/data/result80000.txt",
-    "./tests/data/result800000.txt",
-    "./tests/data/result8000000.txt",
-]
-
 if length(ARGS) != 1
     println("usage: julia test.jl <path to an executable>")
     exit(1)
@@ -126,6 +111,20 @@ end
         @test match("AGGGGGANA", ["GGGG", "AG", "GAA", "GA", "GGGG", "GAA", "GGGG"]) == "1101101"
     end
 
+    test_genome = "data/bank/pseudo139.fasta"
+    test_markers_set = [
+        "./data/8000markers.csv",
+        "./data/80000markers.csv",
+        "./data/800000markers.csv",
+        "./data/8000000markers.csv"
+    ]
+
+    test_results_set = [
+        "./tests/data/result8000.txt",
+        "./tests/data/result80000.txt",
+        "./tests/data/result800000.txt",
+        "./tests/data/result8000000.txt",
+    ]
     @testset "real genome and real markers" begin
         for i in 1:2
             @test match(readline(test_genome), read_markers(test_markers_set[i])) == read_result(test_results_set[i])
