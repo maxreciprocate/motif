@@ -1,5 +1,6 @@
 jam: jam.o jam.h main.cc
-	g++ -O3 -L/opt/cuda/lib64 -I/opt/cuda/include -lcuda -lcudart -lpthread jam.o jam.h main.cc -o jam
+	g++-9 -O3 -lpthread jam.h main.cc -c
+	nvcc -o jam main.o jam.o -lcudart -lcuda
 
 jam.o:
 	nvcc -Xptxas -O3,-v jam.cu -c

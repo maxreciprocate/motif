@@ -90,11 +90,15 @@ private:
   std::condition_variable takecv;
   std::condition_variable addcv;
   std::mutex mx;
+  std::atomic<int> count;
   size_t idx;
   bool done;
 
 public:
-  Queue(uint64_t size) : queue(size + 1), idx(0), done(false) {}
+  Queue(uint64_t size) : queue(size + 1), idx(0), done(false), count(0) {}
+  inline void sub() {
+    ++count;
+  }
 
   void push(std::string sourcefn) {
     std::unique_lock<std::mutex> lock(mx);
@@ -139,7 +143,7 @@ public:
   }
 
   void finish() {
-    if (done) return;
+    if (--count > 0) return;
 
     done = true;
     addcv.notify_all();
@@ -171,6 +175,7 @@ void process (Queue& sourcequeue, Queue& outputqueue, std::vector<uint32_t>& tab
   std::vector<uint8_t> output(markerssize, 0x30);
   cudaMalloc((void **)& d_output, output.size());
 
+  outputqueue.sub();
   std::pair<std::string, std::string> pair = sourcequeue.pop();
 
   while (pair.second.size() > 0) {
