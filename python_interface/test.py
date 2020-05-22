@@ -26,7 +26,7 @@ def read_genomes(genome_list_filename):
 
     for i, genome_path in enumerate(genome_paths_list):
         with open(genome_path) as genome_file:
-            print(i + '. ' + genome_path + ' is read')
+            print(str(i) + '. ' + genome_path + ' is read')
             genome_list[i] = Genome(i, genome_file.read())
 
     return genome_list
