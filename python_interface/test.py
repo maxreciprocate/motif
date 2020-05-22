@@ -12,7 +12,12 @@ def read_genomes(genome_list_filename):
     genome_paths_list = []
     with open(genome_list_filename) as genome_list_file:
         genome_paths_list = [
-            (os.path.dirname(genome_list_filename) + '/' + genome_filename.strip())
+            (
+                os.path.join(
+                    os.path.dirname(genome_list_filename),
+                    genome_filename.strip()
+                )
+            )
             for genome_filename in genome_list_file.readlines()
             if genome_filename.strip()
         ]
@@ -21,7 +26,7 @@ def read_genomes(genome_list_filename):
 
     for i, genome_path in enumerate(genome_paths_list):
         with open(genome_path) as genome_file:
-            print(genome_path + ' is read')
+            print(i + '. ' + genome_path + ' is read')
             genome_list[i] = Genome(i, genome_file.read())
 
     return genome_list
@@ -44,7 +49,7 @@ def test_algorithm(genomes_list, presence_matrix_test):
 
 def get_all_pickles(pickles_dir):
     return [
-        file for file in os.listdir(pickles_dir)
+        os.path.join(pickles_dir, file) for file in os.listdir(pickles_dir)
         if (
                 os.path.isfile(os.path.join(pickles_dir, file)) and
                 os.path.splitext(os.path.join(pickles_dir, file))[1] == '.pickle'
