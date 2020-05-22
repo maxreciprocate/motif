@@ -12,9 +12,9 @@ def read_genomes(genome_list_filename):
     genome_paths_list = []
     with open(genome_list_filename) as genome_list_file:
         genome_paths_list = [
-            (os.path.dirname(genome_list_filename) + '/' + genome_filename)
+            (os.path.dirname(genome_list_filename) + '/' + genome_filename.strip())
             for genome_filename in genome_list_file.readlines()
-            if genome_filename
+            if genome_filename.strip()
         ]
 
     genome_list = [None for _ in range(len(genome_paths_list))]
