@@ -21,6 +21,7 @@ def read_genomes(genome_list_filename):
 
     for i, genome_path in enumerate(genome_paths_list):
         with open(genome_path) as genome_file:
+            print(genome_path + ' is read')
             genome_list[i] = Genome(i, genome_file.read())
 
     return genome_list
@@ -53,9 +54,14 @@ def get_all_pickles(pickles_dir):
 
 if __name__ == '__main__':
     genomes_list = read_genomes(os.environ['GENOMES_LIST_PATH'])
+    print('Reading finished')
     pickles = get_all_pickles(os.environ['TESTS_DIR_PATH'])
+    print('Pickles are ready')
 
     for pickle_filename in pickles:
         with open(pickle_filename, 'rb') as pickle_file:
+            print(pickle_filename + ' testing started')
             presence_matrix_test = pickle.load(pickle_file)
             test_algorithm(genomes_list, presence_matrix_test)
+            print(pickle_filename + ' testing finished')
+
