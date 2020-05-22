@@ -69,4 +69,3 @@ if __name__ == '__main__':
             presence_matrix_test = pickle.load(pickle_file)
             test_algorithm(genomes_list, presence_matrix_test)
             print(pickle_filename + ' testing finished')
-
