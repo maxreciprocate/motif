@@ -58,12 +58,7 @@ def get_all_pickles(pickles_dir):
 
 
 if __name__ == '__main__':
-    genomes_list = [
-        Genome("test1", "AAACNNTTAC"),  # expect 100
-        Genome("test2", "TTATTGACAT"),  # expect 001
-        Genome("test3", "TTACACTAAA"),  # expect 110
-    ]
-    # genomes_list = read_genomes(os.environ['GENOMES_LIST_PATH'])
+    genomes_list = read_genomes(os.environ['GENOMES_LIST_PATH'])
     print('Reading finished')
     pickles = get_all_pickles(os.environ['TESTS_DIR_PATH'])
     print('Pickles are ready')
@@ -71,9 +66,6 @@ if __name__ == '__main__':
     for pickle_filename in pickles:
         with open(pickle_filename, 'rb') as pickle_file:
             print(pickle_filename + ' testing started')
-            print(pickle_filename + ' started loading')
             presence_matrix_test = pickle.load(pickle_file)
-            print(pickle_filename + ' finished loading')
             test_algorithm(genomes_list, presence_matrix_test)
             print(pickle_filename + ' testing finished')
-
