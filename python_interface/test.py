@@ -71,9 +71,9 @@ if __name__ == '__main__':
     for pickle_filename in pickles:
         with open(pickle_filename, 'rb') as pickle_file:
             print(pickle_filename + ' testing started')
-            print(pickle_file + ' started loading')
+            print(pickle_filename + ' started loading')
             presence_matrix_test = pickle.load(pickle_file)
-            print(pickle_file + ' finished loading')
+            print(pickle_filename + ' finished loading')
             test_algorithm(genomes_list, presence_matrix_test)
             print(pickle_filename + ' testing finished')
 
