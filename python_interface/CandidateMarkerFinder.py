@@ -102,7 +102,7 @@ class CandidateMarkerFinder(ExtractionStage):
 
         matrix = Analyzer().run(
             np.array([genome.get_genome_string_data() for genome in genomes.values()]),
-            np.array([marker.sequence for marker in markers])
+            np.array([marker._sequence for marker in markers])
         )
 
         # TODO: insure that the order is the same (preallocate the matrix before the analyzing)
