@@ -18,8 +18,14 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include "jam.h"
-
+#include <pybind11/pybind11.h>
+// #include "jam/jam.h"
+#include <pybind11/stl.h>
+#include <pybind11/numpy.h>
 // #define debug
+
+namespace py = pybind11;
+
 
 struct measurer {
   std::string subject;
@@ -84,6 +90,7 @@ void pptable(const std::vector<uint32_t> &table) {
 }
 
 typedef std::pair<std::string, std::string> P;
+// TODO: make pair type for <string, vector<int8_t>
 
 class Queue {
 private:
@@ -336,4 +343,117 @@ void run(const std::string& genome_path,
 
   writer.join();
   reader.join();
+}
+
+typedef py::list A;
+
+
+py::array run(
+  const A genome_name,
+  const A genome_data,
+  const A markers_data,
+  // py::array_t<uint8_t> output_matrix,
+  int n_devices
+)
+{
+  std::vector<std::string> markers;
+  uint64_t nchars = 0;
+
+  for (ssize_t i = 0; i < markers_data.size(); ++i) {
+    auto data = PyUnicode_AsUTF8(markers_data[i].ptr());
+    markers.emplace_back(data);
+
+    nchars += strlen(data);
+  }
+
+  uint32_t tablesize = std::ceil(
+      nchars -
+      1 / 2 * markers.size() * std::log2(markers.size() / std::sqrt(4)) + 24);
+
+  std::vector<uint32_t> table(tablesize * 5, 0);
+
+  uint32_t edge = 0;
+  uint32_t wordidx = 0;
+
+  std::unordered_map<uint32_t, std::vector<uint32_t>> duplicates;
+  std::unordered_map<std::string, uint32_t> marked_mapping;
+
+  for (const auto& marker: markers) {
+
+    uint32_t vx = 0;
+
+    for (auto &base : marker) {
+      uint32_t idx = 5 * vx + Lut[base] - 1;
+
+      if (table[idx] == 0)
+        table[idx] = ++edge;
+
+      vx = table[idx];
+    }
+
+    auto search = marked_mapping.find(marker);
+
+    ++wordidx;
+
+    if (search == marked_mapping.end()) {
+      table[5 * vx + 4] = wordidx;
+      marked_mapping[marker] = wordidx;
+
+      // trim this one, later
+      duplicates[wordidx] = {};
+    } else {
+      duplicates[search->second].push_back(wordidx);
+    }
+  }
+
+
+  Queue sourcequeue (64);
+  Queue outputqueue (64);
+
+  std::thread reader {[&]() {
+    for (ssize_t i = 0; i < genome_name.size(); ++i)
+      sourcequeue.push(std::make_pair(
+                      std::string(PyUnicode_AsUTF8(genome_name[i].ptr())),
+                      std::string(PyUnicode_AsUTF8(genome_data[i].ptr()))));
+
+    sourcequeue.finish();
+  }};
+
+  // std::string outputfn (out_path);
+  std::vector<std::pair<std::string, std::string>> output;
+  std::thread writer {[&]() {
+
+    auto outputpair = outputqueue.pop();
+    int i = 0;
+    while (outputpair.second.size() > 0) {
+      output.push_back(outputpair);
+       
+      outputpair = outputqueue.pop();
+    }
+
+  }};
+
+  int devicecount = 0;
+  cudaError_t error = cudaGetDeviceCount(&devicecount);
+  if (error != cudaSuccess) {
+    printf("(cuda): can't get a grip upon devices with %s\n", cudaGetErrorString(error));
+    exit(1);
+  }
+
+  std::vector<std::thread> workers;
+  workers.reserve(devicecount);
+
+  uint8_t offset = std::min(n_devices, devicecount-1);
+
+  for (uint8_t idx = offset; idx < devicecount; ++idx) {
+    workers.emplace_back(process, std::ref(sourcequeue), std::ref(outputqueue), std::ref(table), std::ref(duplicates), markers.size(), idx);
+  }
+
+  for (auto& t: workers)
+    t.join();
+
+  writer.join();
+  reader.join();
+
+  return py::array(py::cast(output));
 }
