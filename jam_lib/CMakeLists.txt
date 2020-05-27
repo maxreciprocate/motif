@@ -1,12 +1,10 @@
 cmake_minimum_required(VERSION 3.10)
 project(jam_lib LANGUAGES CXX CUDA)
 
-# set(PYBIND11_CXX_COMPILER /usr/bin/gcc-10)
-set(PYBIND11_CPP_STANDARD -std=c++11)
 add_subdirectory(pybind11)
 
-set(CMAKE_C_COMPILER /usr/bin/gcc-10)
-set(CMAKE_CXX_COMPILER /usr/bin/g++-10)
+set(CMAKE_C_COMPILER /usr/bin/gcc-9)
+set(CMAKE_CXX_COMPILER /usr/bin/g++-9)
 
 ##pybind11 sets -fvisibility=hidden in INTERFACE_COMPILE_OPTIONS on it's module target
 get_target_property(modifacecopts module INTERFACE_COMPILE_OPTIONS)
