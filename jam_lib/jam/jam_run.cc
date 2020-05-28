@@ -19,10 +19,9 @@
 #include <cuda_runtime.h>
 #include "jam.h"
 #include <pybind11/pybind11.h>
-// #include "jam/jam.h"
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
-// #define debug
+#include <mutex>
 
 namespace py = pybind11;
 
@@ -160,8 +159,9 @@ public:
 };
 
 
-void process (Queue<std::pair<std::string, std::string>>& sourcequeue,
-              Queue<std::pair<std::string, std::vector<int8_t>>>& outputqueue, 
+void process (Queue<std::pair<int, std::string>>& sourcequeue,
+              py::array_t<int8_t> output_matrix,
+              // py::list& output_matrix,
               std::vector<uint32_t>& table, 
               std::unordered_map<uint32_t, std::vector<uint32_t>>& duplicates,
               uint64_t markerssize, uint8_t deviceidx) 
@@ -170,6 +170,7 @@ void process (Queue<std::pair<std::string, std::string>>& sourcequeue,
   uint8_t *d_lut;
   char *d_source;
   int8_t *d_output;
+  std::mutex mtx;
 
   printf("setting up %d device\n", deviceidx);
   auto error = cudaSetDevice(deviceidx);
@@ -187,33 +188,34 @@ void process (Queue<std::pair<std::string, std::string>>& sourcequeue,
 
   // unfancy foreknowledge
   cudaMalloc((void **)& d_source, 150 * 1 << 20);
-  std::vector<int8_t> output(markerssize, 0);
-  cudaMalloc((void **)& d_output, output.size());
 
-  outputqueue.sub();
   auto pair = sourcequeue.pop();
+  
+    // auto output_row = output_matrix.mutable_data(sourcefn_pair.first);
+
+  // py::array_t<int8_t> data = py::cast<py::array>(output_matrix[source_idx]);
+  cudaMalloc((void **)& d_output, output_matrix.shape(0));
 
   while (pair.second.size() > 0) {
-
     auto source = pair.second;
-    auto sourcefn = pair.first;
+    auto source_idx = pair.first;
+    auto output_row = output_matrix.mutable_data(source_idx);
 
-    match(d_table, d_source, source.size(), d_lut, d_output, output, source);
+    // auto info = data.request();
+    // int8_t* output_row = (int8_t*) info.ptr;
+    match(d_table, d_source, source.size(), d_lut, d_output, output_row, output_matrix.shape(0), source, mtx);
     
     for (const auto &pair : duplicates) {
-      if (output[pair.first - 1] == 1) {
+      if (output_row[pair.first - 1] == 1) {
         for (const auto &idx : pair.second)
-          output[idx - 1] = 1;
+          output_row[idx - 1] = 1;
       }
     }
-    // outputqueue.push(make_pair(sourcefn, std::string(output.begin(), output.end())));
-    outputqueue.push(make_pair(sourcefn, output));
-    std::vector<uint8_t> another(output.begin(), output.end());
-    std::fill(output.begin(), output.end(), 0);
+
     pair = sourcequeue.pop();
   }
 
-  outputqueue.finish();
+  // outputqueue.finish();
   cudaFree(d_table);
   cudaFree(d_lut);
   cudaFree(d_output);
@@ -221,10 +223,12 @@ void process (Queue<std::pair<std::string, std::string>>& sourcequeue,
 }
 
 
-py::array run(
-  const py::list genome_name,
+void run(
+  // const py::list genome_name,
   const py::list genome_data,
   const py::list markers_data,
+  py::array_t<int8_t> output_matrix,
+  // py::list output_matrix,
   int n_devices
 )
 {
@@ -280,33 +284,30 @@ py::array run(
   }
 
 
-  Queue<std::pair<std::string, std::string>> sourcequeue (64);
-  Queue<std::pair<std::string, std::vector<int8_t>>> outputqueue (64);
+  Queue<std::pair<int, std::string>> sourcequeue (64);
+  // Queue<std::pair<std::pair<int, std::string>, py::array_t<int8_t>>> outputqueue (64);
 
   std::thread reader {[&]() {
-    for (ssize_t i = 0; i < genome_name.size(); ++i) {
-      // std::cout << std::string(data) << "from read" << std::endl;
-      sourcequeue.push(std::make_pair(
-                      std::string(PyUnicode_AsUTF8(genome_name[i].ptr())),
-                      std::string(PyUnicode_AsUTF8(genome_data[i].ptr()))));
+    for (int i = 0; i < genome_data.size(); ++i) {
+      sourcequeue.push(std::make_pair(i, std::string(PyUnicode_AsUTF8(genome_data[i].ptr()))));
     }
     sourcequeue.finish();
   }};
 
   // std::string outputfn (out_path);
-  std::vector<std::pair<std::string, py::array_t<int8_t>>> output;
-  std::thread writer {[&]() {
-    auto outputpair = outputqueue.pop();
+  // std::vector<std::pair<std::string, py::array_t<int8_t>>> output;
+  // std::thread writer {[&]() {
+  //   auto outputpair = outputqueue.pop();
     
-    int i = 0;
-    while (outputpair.second.size() > 0) {
-      py::array_t<int8_t> res_arr(py::cast(outputpair.second));
-      auto new_pair = std::make_pair(outputpair.first, res_arr);
-      output.push_back(new_pair);
-      outputpair = outputqueue.pop();
-    }
+  //   int i = 0;
+  //   while (outputpair.second.size() > 0) {
+  //     // py::array_t<int8_t> res_arr(py::cast(outputpair.second));
+  //     // auto new_pair = std::make_pair(outputpair.first, res_arr);
+  //     output.push_back(outputpair);
+  //     outputpair = outputqueue.pop();
+  //   }
 
-  }};
+  // }};
 
   int devicecount = 0;
   cudaError_t error = cudaGetDeviceCount(&devicecount);
@@ -321,14 +322,14 @@ py::array run(
   uint8_t offset = std::min(n_devices, devicecount-1);
 
   for (uint8_t idx = offset; idx < devicecount; ++idx) {
-    workers.emplace_back(process, std::ref(sourcequeue), std::ref(outputqueue), std::ref(table), std::ref(duplicates), markers.size(), idx);
+    workers.emplace_back(process, std::ref(sourcequeue), std::ref(output_matrix), std::ref(table), std::ref(duplicates), markers.size(), idx);
   }
 
   for (auto& t: workers)
     t.join();
 
-  writer.join();
+  // writer.join();
   reader.join();
 
-  return py::array(py::cast(output));
+  // return py::array(py::cast(output));
 }
