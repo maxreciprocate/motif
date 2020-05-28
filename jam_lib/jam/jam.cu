@@ -22,7 +22,7 @@ void launch(uint32_t *d_table, char* d_source, uint32_t size, uint8_t *d_lut, in
       int wordidx = d_table[5 * vx + 4];
 
       if (wordidx != 0)
-        d_output[wordidx - 1] = 0x31;
+        d_output[wordidx - 1] = 1;
 
       idx += 1;
       if (idx > size || vx == 0)
