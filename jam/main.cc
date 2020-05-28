@@ -1,24 +1,26 @@
-#include "stdio.h"
-#include "string.h"
+#include <cuda.h>
+#include <cuda_runtime.h>
+
 #include <array>
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <condition_variable>
 #include <fstream>
 #include <iostream>
+#include <mutex>
 #include <string>
 #include <string_view>
-#include <unordered_map>
-#include <vector>
 #include <thread>
-#include <condition_variable>
-#include <mutex>
+#include <unordered_map>
 #include <utility>
-#include <cuda.h>
-#include <cuda_runtime.h>
-#include "jam.h"
+#include <vector>
 
-// #define debug
+#include "jam.h"
+#include "stdio.h"
+#include "string.h"
+
+#define debug 0
 
 struct measurer {
   std::string subject;
@@ -59,16 +61,6 @@ inline void readfile(const std::string &filename, std::string &container) {
 
   file.close();
 }
-
-const std::array<uint8_t, 85> Lut = {
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-    0x00, 0x02, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04};
 
 void pptable(const std::vector<uint32_t> &table) {
   printf("%4s %3s %3s %3s %3s\n", "A", "C", "G", "T", "X");
@@ -152,11 +144,12 @@ public:
 
 void process (Queue& sourcequeue, Queue& outputqueue, std::vector<uint32_t>& table, std::unordered_map<uint32_t, std::vector<uint32_t>>& duplicates, uint64_t markerssize, uint8_t deviceidx) {
   uint32_t *d_table;
-  uint8_t *d_lut;
   char *d_source;
   uint8_t *d_output;
 
-  printf("setting up %d device\n", deviceidx);
+  if (debug)
+    printf("setting up %d device\n", deviceidx);
+
   auto error = cudaSetDevice(deviceidx);
 
   if (error != cudaSuccess) {
@@ -164,11 +157,7 @@ void process (Queue& sourcequeue, Queue& outputqueue, std::vector<uint32_t>& tab
     return;
   }
 
-  cudaMalloc((void **)& d_table, table.size() * sizeof(uint32_t));
-  cudaMemcpy(d_table, table.data(), table.size() * sizeof(uint32_t), cudaMemcpyHostToDevice);
-
-  cudaMalloc((void **)& d_lut, Lut.size());
-  cudaMemcpy(d_lut, &Lut, Lut.size(), cudaMemcpyHostToDevice);
+  setup(table);
 
   // unfancy foreknowledge
   cudaMalloc((void **)& d_source, 150 * 1 << 20);
@@ -178,11 +167,17 @@ void process (Queue& sourcequeue, Queue& outputqueue, std::vector<uint32_t>& tab
   outputqueue.sub();
   std::pair<std::string, std::string> pair = sourcequeue.pop();
 
+  float timing = 0;
+  float total  = 0;
+  size_t times = 0;
+
   while (pair.second.size() > 0) {
     auto source = pair.second;
     auto sourcefn = pair.first;
 
-    match(d_table, d_source, source.size(), d_lut, d_output, output, source);
+    match(d_source, source, d_output, output, &timing);
+    ++times;
+    total += timing;
 
     for (const auto &pair : duplicates) {
       if (output[pair.first - 1] == 0x31) {
@@ -197,9 +192,12 @@ void process (Queue& sourcequeue, Queue& outputqueue, std::vector<uint32_t>& tab
     pair = sourcequeue.pop();
   }
 
+  if (debug)
+    printf("Average timing of match: %.2fms\n", total / times);
+
   outputqueue.finish();
+
   cudaFree(d_table);
-  cudaFree(d_lut);
   cudaFree(d_output);
   cudaFree(d_source);
 }
@@ -257,7 +255,7 @@ int main(int argc, char **argv) {
     uint32_t vx = 0;
 
     for (auto &base : marker) {
-      uint32_t idx = 5 * vx + Lut[base] - 1;
+      uint32_t idx = 5 * vx + Lut[base - 0x40] - 1;
 
       if (table[idx] == 0)
         table[idx] = ++edge;
@@ -324,10 +322,13 @@ int main(int argc, char **argv) {
   std::vector<std::thread> workers;
   workers.reserve(devicecount);
 
-  uint8_t offset = argc < 5 ? 0 : std::min(std::stoi(argv[4]), devicecount-1);
+  uint8_t offset = argc < 5 ? 0 : std::min(std::stoi(argv[4]), devicecount - 1);
 
   for (uint8_t idx = offset; idx < devicecount; ++idx) {
-    workers.emplace_back(process, std::ref(sourcequeue), std::ref(outputqueue), std::ref(table), std::ref(duplicates), markers.size(), idx);
+    workers.emplace_back(
+      process,
+      std::ref(sourcequeue), std::ref(outputqueue), std::ref(table),
+      std::ref(duplicates), markers.size(), idx);
   }
 
   for (auto& t: workers)
