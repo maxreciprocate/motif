@@ -420,13 +420,22 @@ py::array run(
   }};
 
   // std::string outputfn (out_path);
-  std::vector<std::pair<std::string, std::string>> output;
+  std::vector<std::pair<std::string, std::vector<int8_t>>> output;
   std::thread writer {[&]() {
 
     auto outputpair = outputqueue.pop();
     int i = 0;
     while (outputpair.second.size() > 0) {
-      output.push_back(outputpair);
+	auto new_pair = std::make_pair(
+		outputpair.first,
+		std::vector<int8_t> (outputpair.second.size())
+	);
+
+      //std::pair<std::string, std::vector<int8_t>> new_pair()
+      //std::vector<int8_t> result(t.size());
+      for (int i = 0; i < outputpair.second.size(); ++i) (new_pair.second)[i] = (outputpair.second)[i] - '0';
+
+      output.push_back(new_pair);
        
       outputpair = outputqueue.pop();
     }
