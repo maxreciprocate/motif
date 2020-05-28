@@ -94,21 +94,20 @@ class CandidateMarkerFinder(ExtractionStage):
 
         markers = self.marker_set.get_marker_list()
         genomes = self.data_controller.get_all_genomes()
-
         genomes_names = genomes.keys()
         self._presence_matrix = PresenceMatrix()
         self._presence_matrix.initialize(genomes_names, len(markers))
         # TODO: insure that Marker has sequence getter to get '_sequence'
 
         matrix = Analyzer().run(
-            genome_names,
-            np.array([genome.get_genome_string_data() for genome in genomes.values()]),
-            np.array([marker._sequence for marker in markers])
+            list(genomes_names),
+            [genome.get_genome_string_data() for genome in genomes.values()],
+            [marker._sequence for marker in markers]
         )
 
         # TODO: insure that the order is the same (preallocate the matrix before the analyzing)
         # row - np.array.dtype = 'int8'
-        for i, genome_name in enumerate(genomes_names):
-            self._presence_matrix.add_all_positions_for_genome(genome_name, matrix[i])
+        for row in matrix:
+            self._presence_matrix.add_all_positions_for_genome(row[0], row[1])
 
         self.completed = True

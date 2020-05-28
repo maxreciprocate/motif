@@ -11,5 +11,5 @@ class DataConnector:
         f.close()
         return buff
 
-i = DataConnector('./data/bank/pseudo88.fasta')
-print(i.get_data())
+#i = DataConnector('./data/bank/pseudo88.fasta')
+#print(i.get_data())
