@@ -11,6 +11,9 @@ groove:
 	$(MAKE) clean -C motif
 	$(MAKE) -C motif
 
+jam_lib:
+	pip3 install --user ./jam_lib/ --upgrade
+
 data-%:
 	$(MAKE) $@ -C data
 

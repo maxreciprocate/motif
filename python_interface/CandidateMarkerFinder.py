@@ -101,6 +101,7 @@ class CandidateMarkerFinder(ExtractionStage):
         # TODO: insure that Marker has sequence getter to get '_sequence'
 
         matrix = Analyzer().run(
+            genome_names,
             np.array([genome.get_genome_string_data() for genome in genomes.values()]),
             np.array([marker._sequence for marker in markers])
         )
