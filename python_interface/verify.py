@@ -17,8 +17,10 @@ def verify(genome_fname, markers_fname, res_file_name):
   with open(res_file_name, "r") as f:
     genome = f.readline().strip()
     result = genome.split(" ")[1]
-    res = np.array(np_res[0][1], dtype=np.int8)
+    # res = np.array(np_res[0][1], dtype=np.int8)
+    res = np_res[0][1]
     print(type(res))
+    print(res.dtype)
     for i, ch in enumerate(result):
       if int(ch) == res[i]:
         continue

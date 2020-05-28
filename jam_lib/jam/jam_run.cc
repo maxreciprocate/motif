@@ -294,14 +294,15 @@ py::array run(
   }};
 
   // std::string outputfn (out_path);
-  std::vector<std::pair<std::string, std::vector<int8_t>>> output;
+  std::vector<std::pair<std::string, py::array_t<int8_t>>> output;
   std::thread writer {[&]() {
-
     auto outputpair = outputqueue.pop();
+    
     int i = 0;
     while (outputpair.second.size() > 0) {
-
-      output.push_back(outputpair);
+      py::array_t<int8_t> res_arr(py::cast(outputpair.second));
+      auto new_pair = std::make_pair(outputpair.first, res_arr);
+      output.push_back(new_pair);
       outputpair = outputqueue.pop();
     }
 
