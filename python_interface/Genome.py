@@ -1,7 +1,10 @@
 class Genome:
-    def __init__(self, name, data):
+    def __init__(self, name):
         self.name = name
-        self.data = data
+        self.data_connector = None
+
+    def add_string_data_connector(self, data_connector):
+        self.data_connector = data_connector
 
     def get_genome_string_data(self):
         """
@@ -9,7 +12,7 @@ class Genome:
             string: whole genome sequence
             dict:   some metadata
         """
-        return self.data
+        return self.data_connector.get_data()
 
     def get_genome_numeric_data(self):
         """

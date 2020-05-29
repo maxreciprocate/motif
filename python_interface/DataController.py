@@ -7,5 +7,5 @@ class DataController:
         """
         :return: list of Genome instances
         """
-        return {genome.name: genome for genome in self.genomes}
+        return self.genomes
 
