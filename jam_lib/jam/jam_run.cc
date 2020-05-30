@@ -161,7 +161,6 @@ public:
 
 void process (Queue<std::pair<int, std::string>>& sourcequeue,
               py::array_t<int8_t> output_matrix,
-              // py::list& output_matrix,
               std::vector<uint32_t>& table, 
               std::unordered_map<uint32_t, std::vector<uint32_t>>& duplicates,
               uint64_t markerssize, uint8_t deviceidx) 
@@ -188,22 +187,18 @@ void process (Queue<std::pair<int, std::string>>& sourcequeue,
 
   // unfancy foreknowledge
   cudaMalloc((void **)& d_source, 150 * 1 << 20);
+  cudaMalloc((void **)& d_output, output_matrix.shape(1));
 
   auto pair = sourcequeue.pop();
-  
-    // auto output_row = output_matrix.mutable_data(sourcefn_pair.first);
-
-  // py::array_t<int8_t> data = py::cast<py::array>(output_matrix[source_idx]);
-  cudaMalloc((void **)& d_output, output_matrix.shape(0));
 
   while (pair.second.size() > 0) {
+
     auto source = pair.second;
     auto source_idx = pair.first;
+    // std::cout << "genome number: " <<source_idx << std::endl;
     auto output_row = output_matrix.mutable_data(source_idx);
 
-    // auto info = data.request();
-    // int8_t* output_row = (int8_t*) info.ptr;
-    match(d_table, d_source, source.size(), d_lut, d_output, output_row, output_matrix.shape(0), source, mtx);
+    match(d_table, d_source, source.size(), d_lut, d_output, output_row, output_matrix.shape(1), source, mtx);
     
     for (const auto &pair : duplicates) {
       if (output_row[pair.first - 1] == 1) {
@@ -222,14 +217,33 @@ void process (Queue<std::pair<int, std::string>>& sourcequeue,
   cudaFree(d_source);
 }
 
+void read_genome_from_pyobject(py::handle source, std::stringstream& buff) {
+  buff << PyUnicode_AsUTF8(genome_data[i].ptr());
+}
+
+void read_genome_from_numpy(py::handle source, std::stringstream& buff) {
+  static const char chars[4] = {'A', 'T', 'C', 'G'};
+  auto data = py::array_t<int8_t, py::array::c_style | py::array::forcecast>::ensure(source);
+
+  for (int i = 0; i < data.shape(1); ++i) {
+
+    char ch;
+    for (int j = 0; j < data.shape(0); ++j) {
+      if (*data.data(j, i) == 1) {
+        ch = chars[j];
+      }
+    }
+    buff << ch; 
+  }
+}
+
 
 void run(
-  // const py::list genome_name,
   const py::list genome_data,
   const py::list markers_data,
   py::array_t<int8_t> output_matrix,
-  // py::list output_matrix,
-  int n_devices
+  int n_devices,
+  bool is_numpy
 )
 {
   std::vector<std::string> markers;
@@ -289,25 +303,16 @@ void run(
 
   std::thread reader {[&]() {
     for (int i = 0; i < genome_data.size(); ++i) {
-      sourcequeue.push(std::make_pair(i, std::string(PyUnicode_AsUTF8(genome_data[i].ptr()))));
+      std::stringstream buff;
+      if (is_numpy) 
+        read_genome_from_numpy(genome_data[i], buff); 
+      else 
+        read_genome_from_pyobject(genome_data[i], buff);
+      sourcequeue.push(std::make_pair(i, buff.str()));
     }
     sourcequeue.finish();
   }};
 
-  // std::string outputfn (out_path);
-  // std::vector<std::pair<std::string, py::array_t<int8_t>>> output;
-  // std::thread writer {[&]() {
-  //   auto outputpair = outputqueue.pop();
-    
-  //   int i = 0;
-  //   while (outputpair.second.size() > 0) {
-  //     // py::array_t<int8_t> res_arr(py::cast(outputpair.second));
-  //     // auto new_pair = std::make_pair(outputpair.first, res_arr);
-  //     output.push_back(outputpair);
-  //     outputpair = outputqueue.pop();
-  //   }
-
-  // }};
 
   int devicecount = 0;
   cudaError_t error = cudaGetDeviceCount(&devicecount);
