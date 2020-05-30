@@ -29,7 +29,7 @@ def verify(genomefnsource, markers_fname, res_file_name):
       markers.append(marker)
 
   matrix = np.zeros((len(genomes),len(markers)), dtype=np.int8)
-  jam_lib.run(genomes, markers, matrix, 0)
+  jam_lib.run(genomes, markers, matrix, 0, False)
   print(time.time() - now)
 
   with open(res_file_name, "r") as f:

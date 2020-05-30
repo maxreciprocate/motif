@@ -1,5 +1,8 @@
 import numpy as np
 import time
+import sys
+import csv
+import os
 
 from CandidateMarkerFinder import CandidateMarkerFinder
 from MarkersSet import MarkersSet
@@ -44,14 +47,17 @@ for i, genome_name in enumerate(genome_names):
 
 candidate_marker_finder.data_controller = DataController("data_type", genome_list)
 
+start_time = time.time()
 candidate_marker_finder.run()
+print(time.time() - start_time)
 
 output = candidate_marker_finder._presence_matrix._presence_matrix
 
-with open(output_file, "w") as f:
-  for i, res in enumerate(output):
-    f.write(genome_names[i])
-    f.write(' ')
-    f.write(''.join(str(chr) for chr in res))
-    f.write('\n')
+if int(os.environ['SAVE_RESULT_TO_FILE'] or '0'):
+  with open(output_file, "w") as f:
+    for i, res in enumerate(output):
+      f.write(genome_names[i])
+      f.write(' ')
+      f.write(''.join(str(chr) for chr in res))
+      f.write('\n')
 

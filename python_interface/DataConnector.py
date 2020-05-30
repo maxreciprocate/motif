@@ -6,6 +6,10 @@ class DataConnector:
         '''
         Read data from a file and reformat in to a specific format Returns: either string or numpy.array, dtype=float32
         '''
+        #pickle_file = open(self.file, 'rb')
+        #buff = pickle.load(pickle_file)
+        #pickle_file.close()
+
         f = open(self.file)
         buff = f.read()
         f.close()
