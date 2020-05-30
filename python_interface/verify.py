@@ -1,14 +1,15 @@
 import jam_lib
 import numpy as np
+import sys
 import time
 import subprocess
 
 def verify(genomefnsource, markers_fname, res_file_name):
   
   start = time.time()
-  subprocess.run(["./jam/jam", "data/50genomes.txt", "data/800000markers.csv", "data/out_now.txt"], stdout=subprocess.PIPE)
-  now = time.time()
-  print(now - start)
+  subprocess.run(["./jam/jam", genomefnsource, markers_fname, res_file_name], stdout=subprocess.PIPE)
+  print(time.time() - start)
+
   markers = []
   genomes = []
   genome_names = []
@@ -16,6 +17,7 @@ def verify(genomefnsource, markers_fname, res_file_name):
   with open(genomefnsource) as f:
     genome_names = ["data/" + i.strip() for i in f.readlines()]
 
+  now = time.time()
   for genome_fname in genome_names:
     with open(genome_fname,"r") as f:
       genome = f.readline()
@@ -27,32 +29,33 @@ def verify(genomefnsource, markers_fname, res_file_name):
       markers.append(marker)
 
   matrix = np.zeros((len(genomes),len(markers)), dtype=np.int8)
-  jam_lib.run(genomes, markers, matrix, 1)
+  jam_lib.run(genomes, markers, matrix, 0)
   print(time.time() - now)
-  print("runned")
 
   with open(res_file_name, "r") as f:
-    j = 0
-    genome = f.readline().strip()
-    
-    while genome:
-      name, result = genome.split(" ")
-      res = matrix[j]
-
-      for i, ch in enumerate(result):
-        if int(ch) == res[i]:
-          continue
-        else: 
-          raise RuntimeError("Failed")
-
-      print("Verified ", name)
-      j += 1
-      genome = f.readline().strip()
-
+    lines = f.readlines()
+    for j in range(matrix.shape[0]):
+      for line in lines:
+        name, genome = line.strip().split(" ")
+        if name == genome_names[j]:
+          row = matrix[j]
+          for i, ch in enumerate(genome):
+            if int(ch) != row[i]:
+              print("Failed for ", name)
+              break
+            else: 
+              continue
+          print(name) 
+    print("Verified")
   return 0
 
 if __name__ == "__main__":
-    np.set_printoptions(threshold=np. inf)
-    verify("data/50genomes.txt", 
-    "data/800000markers.csv", "data/out_now.txt")
+#    np.set_printoptions(threshold=np. inf)
+    if len(sys.argv) != 4:
+      print(f"usage: {sys.argv[0]} <sources_file> <markers_file> <output_file>")
+      exit(1)
+
+    _, sources_file, markers_file, output_file = sys.argv
+    verify(sources_file, markers_file, output_file)
+
 

@@ -41,15 +41,12 @@ void launch(uint32_t *d_table, char* d_source, uint32_t size, uint8_t *d_lut, in
 }
 
 void match(uint32_t *d_table, char* d_source, uint32_t size, uint8_t *d_lut,
-           int8_t *d_output, int8_t* output, int64_t output_size, std::string& source, std::mutex& mtx) 
+           int8_t *d_output, int8_t* output, int64_t output_size, std::string& source) 
 {
   cudaMemcpy(d_source, source.data(), source.size(), cudaMemcpyHostToDevice);
-  std::unique_lock<std::mutex> lock(mtx);
   cudaMemcpy(d_output, output, output_size, cudaMemcpyHostToDevice);
-  lock.unlock();
-  launch<<<8000, 1024>>>(d_table, d_source, source.size(), d_lut, d_output);
-  lock.lock();
-  cudaMemcpy(output, d_output, output_size, cudaMemcpyDeviceToHost);
-  lock.unlock();
 
+  launch<<<8000, 1024>>>(d_table, d_source, source.size(), d_lut, d_output);
+  
+  cudaMemcpy(output, d_output, output_size, cudaMemcpyDeviceToHost);
 }

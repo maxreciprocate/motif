@@ -5,7 +5,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
-#include <fstream>
+#include <fstream> 
 #include <iostream>
 #include <string>
 #include <string_view>
@@ -169,7 +169,6 @@ void process (Queue<std::pair<int, std::string>>& sourcequeue,
   uint8_t *d_lut;
   char *d_source;
   int8_t *d_output;
-  std::mutex mtx;
 
   printf("setting up %d device\n", deviceidx);
   auto error = cudaSetDevice(deviceidx);
@@ -195,10 +194,9 @@ void process (Queue<std::pair<int, std::string>>& sourcequeue,
 
     auto source = pair.second;
     auto source_idx = pair.first;
-    // std::cout << "genome number: " <<source_idx << std::endl;
     auto output_row = output_matrix.mutable_data(source_idx);
 
-    match(d_table, d_source, source.size(), d_lut, d_output, output_row, output_matrix.shape(1), source, mtx);
+    match(d_table, d_source, source.size(), d_lut, d_output, output_row, output_matrix.shape(1), source);
     
     for (const auto &pair : duplicates) {
       if (output_row[pair.first - 1] == 1) {
@@ -210,30 +208,25 @@ void process (Queue<std::pair<int, std::string>>& sourcequeue,
     pair = sourcequeue.pop();
   }
 
-  // outputqueue.finish();
   cudaFree(d_table);
   cudaFree(d_lut);
   cudaFree(d_output);
   cudaFree(d_source);
 }
 
-void read_genome_from_pyobject(py::handle source, std::stringstream& buff) {
-  buff << PyUnicode_AsUTF8(genome_data[i].ptr());
-}
-
-void read_genome_from_numpy(py::handle source, std::stringstream& buff) {
+void read_genome_from_numpy(py::handle source, std::string& buff) {
   static const char chars[4] = {'A', 'T', 'C', 'G'};
   auto data = py::array_t<int8_t, py::array::c_style | py::array::forcecast>::ensure(source);
 
   for (int i = 0; i < data.shape(1); ++i) {
 
-    char ch;
+    char ch = 'N';
     for (int j = 0; j < data.shape(0); ++j) {
       if (*data.data(j, i) == 1) {
         ch = chars[j];
       }
     }
-    buff << ch; 
+    buff.push_back(ch); 
   }
 }
 
@@ -297,22 +290,19 @@ void run(
     }
   }
 
-
   Queue<std::pair<int, std::string>> sourcequeue (64);
-  // Queue<std::pair<std::pair<int, std::string>, py::array_t<int8_t>>> outputqueue (64);
 
   std::thread reader {[&]() {
     for (int i = 0; i < genome_data.size(); ++i) {
-      std::stringstream buff;
+      std::string buff;
       if (is_numpy) 
         read_genome_from_numpy(genome_data[i], buff); 
       else 
-        read_genome_from_pyobject(genome_data[i], buff);
-      sourcequeue.push(std::make_pair(i, buff.str()));
+        buff = PyUnicode_AsUTF8(genome_data[i].ptr());
+      sourcequeue.push(std::make_pair(i, buff));
     }
     sourcequeue.finish();
   }};
-
 
   int devicecount = 0;
   cudaError_t error = cudaGetDeviceCount(&devicecount);
@@ -325,16 +315,13 @@ void run(
   workers.reserve(devicecount);
 
   uint8_t offset = std::min(n_devices, devicecount-1);
-
+  std::mutex mx;
   for (uint8_t idx = offset; idx < devicecount; ++idx) {
-    workers.emplace_back(process, std::ref(sourcequeue), std::ref(output_matrix), std::ref(table), std::ref(duplicates), markers.size(), idx);
+    workers.emplace_back(process, std::ref(sourcequeue), output_matrix, std::ref(table), std::ref(duplicates), markers.size(), idx);
   }
 
   for (auto& t: workers)
     t.join();
 
-  // writer.join();
   reader.join();
-
-  // return py::array(py::cast(output));
 }
