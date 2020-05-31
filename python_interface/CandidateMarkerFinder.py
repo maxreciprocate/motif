@@ -92,23 +92,39 @@ class CandidateMarkerFinder(ExtractionStage):
         # if self.data_mode == "chromosome":
         #     self.chromosome
 
-        markers = self.marker_set.get_marker_list()
+        markers = [marker.sequence for marker in self.marker_set.get_marker_list()]
         genomes = self.data_controller.get_all_genomes()
 
-        genomes_names = genomes.keys()
+        counter = 0
+        block_size = 100
+
+        block_genomes = [None for _ in range(block_size)]
+
         self._presence_matrix = PresenceMatrix()
-        self._presence_matrix.initialize(genomes_names, len(markers))
-        # TODO: insure that Marker has sequence getter to get '_sequence'
+        self._presence_matrix.initialize(genomes, len(markers))
 
-        matrix = Analyzer().run(
-            genome_names,
-            np.array([genome.get_genome_string_data() for genome in genomes.values()]),
-            np.array([marker._sequence for marker in markers])
-        )
+        while counter < len(genomes):
+            # fill block with data
+            block_counter = 0
+            while block_counter < block_size and counter < len(genomes):
+                block_genomes[block_counter] = genomes[block_counter].get_genome_string_data()
+                block_counter += 1
+                counter += 1
 
-        # TODO: insure that the order is the same (preallocate the matrix before the analyzing)
-        # row - np.array.dtype = 'int8'
-        for i, genome_name in enumerate(genomes_names):
-            self._presence_matrix.add_all_positions_for_genome(genome_name, matrix[i])
+            # slice block if needed
+            if block_counter < block_size - 1:
+                block_genomes = block_genomes[:block_counter]
+
+            matrix_result = np.zeros((len(block_genomes), len(markers)), dtype=np.int8)
+            Analyzer().run(
+                block_genomes,
+                markers,
+                matrix_result, 
+                false, 
+                0
+            )
+
+            for i, genome_result in enumerate(matrix_result):
+                self._presence_matrix.add_all_positions_for_genome(genomes[counter - block_size + i], genome_result)
 
         self.completed = True

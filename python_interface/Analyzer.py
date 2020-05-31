@@ -3,21 +3,15 @@ import jam_lib as jam
 
 
 class Analyzer:
-    def run(self, genome_names, np_genomes_array, np_markers_array):
-        # output_matrix = np.empty(shape=(genome_names.size, 2), dtype=np.chararray)
-        return jam.run(genome_names,
-                np_genomes_array,
-                np_markers_array, 
-                1
-                )
-        # return output_matrix
+    def run(self, genome_names, np_genomes_array, np_markers_array, n_devices, is_numpy):
+        output = np.zeros((len(np_genomes_array), len(np_markers_array)), dtype=np.int8)
+        jam.run(np_genomes_array, np_markers_array, output, 1, False)
+        return output
 
 if __name__ == "__main__":
-    genome_name = ['fasta1','fasta2','fasta3']
     genome_data = ["ACTAACC", "ATTTTAA", "AAAAAA"]
     markers = ["AA", "ACT", "TTTTA"]
-    # out = np.empty((3,2), dtype=np.float)
-    # out = np.
+    out = np.zeros((3,3), dtype=np.int8)
     an = Analyzer()
-    out = an.run(genome_name, genome_data, markers)
+    an.run(genome_data, markers, out)
     print(out)

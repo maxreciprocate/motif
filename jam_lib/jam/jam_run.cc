@@ -5,7 +5,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
-#include <fstream>
+#include <fstream> 
 #include <iostream>
 #include <string>
 #include <string_view>
@@ -19,10 +19,9 @@
 #include <cuda_runtime.h>
 #include "jam.h"
 #include <pybind11/pybind11.h>
-// #include "jam/jam.h"
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
-// #define debug
+#include <mutex>
 
 namespace py = pybind11;
 
@@ -89,12 +88,10 @@ void pptable(const std::vector<uint32_t> &table) {
   }
 }
 
-typedef std::pair<std::string, std::string> P;
-// TODO: make pair type for <string, vector<int8_t>
-
+template <class T>
 class Queue {
 private:
-  std::vector<P> queue;
+  std::vector<T> queue;
   std::condition_variable takecv;
   std::condition_variable addcv;
   std::mutex mx;
@@ -121,7 +118,7 @@ public:
     addcv.notify_one();
   }
 
-  void push(P pair) {
+  void push(T pair) {
     std::unique_lock<std::mutex> lock(mx);
 
     while (idx == queue.capacity() - 1)
@@ -133,14 +130,16 @@ public:
     addcv.notify_one();
   }
 
-  P pop() {
+  T pop() {
     std::unique_lock<std::mutex> lock(mx);
 
     while (!done && idx == 0)
       addcv.wait(lock);
 
-    if (done && idx == 0)
-      return std::make_pair("", "");
+    if (done && idx == 0) {
+      return T();
+    }
+      // return std::make_pair("", std::vector<int8_t>());
 
     auto element = queue[idx--];
 
@@ -149,6 +148,7 @@ public:
 
     return element;
   }
+  
 
   void finish() {
     if (--count > 0) return;
@@ -158,11 +158,17 @@ public:
   }
 };
 
-void process (Queue& sourcequeue, Queue& outputqueue, std::vector<uint32_t>& table, std::unordered_map<uint32_t, std::vector<uint32_t>>& duplicates, uint64_t markerssize, uint8_t deviceidx) {
+
+void process (Queue<std::pair<int, std::string>>& sourcequeue,
+              py::array_t<int8_t> output_matrix,
+              std::vector<uint32_t>& table, 
+              std::unordered_map<uint32_t, std::vector<uint32_t>>& duplicates,
+              uint64_t markerssize, uint8_t deviceidx) 
+  {
   uint32_t *d_table;
   uint8_t *d_lut;
   char *d_source;
-  uint8_t *d_output;
+  int8_t *d_output;
 
   printf("setting up %d device\n", deviceidx);
   auto error = cudaSetDevice(deviceidx);
@@ -180,180 +186,59 @@ void process (Queue& sourcequeue, Queue& outputqueue, std::vector<uint32_t>& tab
 
   // unfancy foreknowledge
   cudaMalloc((void **)& d_source, 150 * 1 << 20);
-  std::vector<uint8_t> output(markerssize, 0x30);
-  cudaMalloc((void **)& d_output, output.size());
+  cudaMalloc((void **)& d_output, output_matrix.shape(1));
 
-  outputqueue.sub();
-  std::pair<std::string, std::string> pair = sourcequeue.pop();
+  auto pair = sourcequeue.pop();
 
   while (pair.second.size() > 0) {
+
     auto source = pair.second;
-    auto sourcefn = pair.first;
+    auto source_idx = pair.first;
+    auto output_row = output_matrix.mutable_data(source_idx);
 
-    match(d_table, d_source, source.size(), d_lut, d_output, output, source);
-
+    match(d_table, d_source, source.size(), d_lut, d_output, output_row, output_matrix.shape(1), source);
+    
     for (const auto &pair : duplicates) {
-      if (output[pair.first - 1] == 0x31) {
+      if (output_row[pair.first - 1] == 1) {
         for (const auto &idx : pair.second)
-          output[idx - 1] = 0x31;
+          output_row[idx - 1] = 1;
       }
     }
 
-    outputqueue.push(make_pair(sourcefn, std::string(output.begin(), output.end())));
-
-    std::fill(output.begin(), output.end(), 0x30);
     pair = sourcequeue.pop();
   }
 
-  outputqueue.finish();
   cudaFree(d_table);
   cudaFree(d_lut);
   cudaFree(d_output);
   cudaFree(d_source);
 }
 
-void run(const std::string& genome_path,
-        const std::string& markers_path,
-        const std::string& out_path,
-        int n_devices
-        ) 
-{
-  std::ifstream sourcesf(genome_path);
-  if (!sourcesf) {
-    // fprintf(stderr, "there is no %s to open\n", genome_path);
-    std::cout << "There is no " << genome_path << "to open" << std::endl;
-    return;
-  }
+void read_genome_from_numpy(py::handle source, std::string& buff) {
+  static const char chars[4] = {'A', 'T', 'C', 'G'};
+  auto data = py::array_t<int8_t, py::array::c_style | py::array::forcecast>::ensure(source);
 
-  std::vector<std::string> sourcesfns;
-  std::string line;
-  while (std::getline(sourcesf, line))
-    sourcesfns.push_back(line);
+  buff.reserve(data.shape(1));
 
-  sourcesf.close();
+  for (int i = 0; i < data.shape(1); ++i) {
 
-  std::ifstream markersf(markers_path);
-  if (!markersf) {
-    // fprintf(stderr, "there is no %s to open\n", markers_path);
-    std::cout << "There is no " << markers_path << "to open" << std::endl;
-    return;
-  }
-
-  std::vector<std::string> markers;
-  uint64_t nchars = 0;
-  while (std::getline(markersf, line)) {
-    markers.emplace_back(line.begin() + line.find(',') + 1, line.end());
-
-    nchars += line.size();
-  }
-
-  markersf.close();
-
-  uint32_t tablesize = std::ceil(
-      nchars -
-      1 / 2 * markers.size() * std::log2(markers.size() / std::sqrt(4)) + 24);
-
-  std::vector<uint32_t> table(tablesize * 5, 0);
-
-  uint32_t edge = 0;
-  uint32_t wordidx = 0;
-
-  std::unordered_map<uint32_t, std::vector<uint32_t>> duplicates;
-  std::unordered_map<std::string, uint32_t> marked_mapping;
-
-  for (const auto &marker : markers) {
-    uint32_t vx = 0;
-
-    for (auto &base : marker) {
-      uint32_t idx = 5 * vx + Lut[base] - 1;
-
-      if (table[idx] == 0)
-        table[idx] = ++edge;
-
-      vx = table[idx];
+    char ch = 'N';
+    for (int j = 0; j < data.shape(0); ++j) {
+      if (*data.data(j, i) == 1) {
+        ch = chars[j];
+      }
     }
-
-    auto search = marked_mapping.find(marker);
-
-    ++wordidx;
-
-    if (search == marked_mapping.end()) {
-      table[5 * vx + 4] = wordidx;
-      marked_mapping[marker] = wordidx;
-
-      // trim this one, later
-      duplicates[wordidx] = {};
-    } else {
-      duplicates[search->second].push_back(wordidx);
-    }
+    buff.push_back(ch); 
   }
-
-  std::string sourcesfn(genome_path);
-  std::string prefix(sourcesfn.substr(0, sourcesfn.find_last_of('/') + 1));
-
-  Queue sourcequeue (64);
-  Queue outputqueue (64);
-
-  std::thread reader {[&]() {
-    for (auto& sourcesfn: sourcesfns)
-      sourcequeue.push(prefix + sourcesfn);
-
-    sourcequeue.finish();
-  }};
-
-  std::string outputfn (out_path);
-  std::thread writer {[&]() {
-    std::ofstream outputf(outputfn);
-
-    auto outputpair = outputqueue.pop();
-
-    while (outputpair.second.size() > 0) {
-      auto sourcefn = outputpair.first;
-      auto output = outputpair.second;
-
-      outputf << sourcefn.substr(sourcefn.find_last_of('/') + 1, sourcefn.size())
-              << ' ';
-      outputf.write((char *) output.data(), output.size());
-      outputf << std::endl;
-
-      outputpair = outputqueue.pop();
-    }
-
-    outputf.close();
-  }};
-
-  int devicecount = 0;
-  cudaError_t error = cudaGetDeviceCount(&devicecount);
-  if (error != cudaSuccess) {
-    printf("(cuda): can't get a grip upon devices with %s\n", cudaGetErrorString(error));
-    exit(1);
-  }
-
-  std::vector<std::thread> workers;
-  workers.reserve(devicecount);
-
-  uint8_t offset = std::min(n_devices, devicecount-1);
-
-  for (uint8_t idx = offset; idx < devicecount; ++idx) {
-    workers.emplace_back(process, std::ref(sourcequeue), std::ref(outputqueue), std::ref(table), std::ref(duplicates), markers.size(), idx);
-  }
-
-  for (auto& t: workers)
-    t.join();
-
-  writer.join();
-  reader.join();
 }
 
-typedef py::list A;
 
-
-py::array run(
-  const A genome_name,
-  const A genome_data,
-  const A markers_data,
-  // py::array_t<uint8_t> output_matrix,
-  int n_devices
+void run(
+  const py::list genome_data,
+  const py::list markers_data,
+  py::array_t<int8_t> output_matrix,
+  int n_devices,
+  bool is_numpy
 )
 {
   std::vector<std::string> markers;
@@ -361,6 +246,7 @@ py::array run(
 
   for (ssize_t i = 0; i < markers_data.size(); ++i) {
     auto data = PyUnicode_AsUTF8(markers_data[i].ptr());
+
     markers.emplace_back(data);
 
     nchars += strlen(data);
@@ -406,31 +292,18 @@ py::array run(
     }
   }
 
-
-  Queue sourcequeue (64);
-  Queue outputqueue (64);
+  Queue<std::pair<int, std::string>> sourcequeue (64);
 
   std::thread reader {[&]() {
-    for (ssize_t i = 0; i < genome_name.size(); ++i)
-      sourcequeue.push(std::make_pair(
-                      std::string(PyUnicode_AsUTF8(genome_name[i].ptr())),
-                      std::string(PyUnicode_AsUTF8(genome_data[i].ptr()))));
-
-    sourcequeue.finish();
-  }};
-
-  // std::string outputfn (out_path);
-  std::vector<std::pair<std::string, std::string>> output;
-  std::thread writer {[&]() {
-
-    auto outputpair = outputqueue.pop();
-    int i = 0;
-    while (outputpair.second.size() > 0) {
-      output.push_back(outputpair);
-       
-      outputpair = outputqueue.pop();
+    for (int i = 0; i < genome_data.size(); ++i) {
+      std::string buff;
+      if (is_numpy) 
+        read_genome_from_numpy(genome_data[i], buff); 
+      else 
+        buff = PyUnicode_AsUTF8(genome_data[i].ptr());
+      sourcequeue.push(std::make_pair(i, buff));
     }
-
+    sourcequeue.finish();
   }};
 
   int devicecount = 0;
@@ -444,16 +317,12 @@ py::array run(
   workers.reserve(devicecount);
 
   uint8_t offset = std::min(n_devices, devicecount-1);
-
   for (uint8_t idx = offset; idx < devicecount; ++idx) {
-    workers.emplace_back(process, std::ref(sourcequeue), std::ref(outputqueue), std::ref(table), std::ref(duplicates), markers.size(), idx);
+    workers.emplace_back(process, std::ref(sourcequeue), output_matrix, std::ref(table), std::ref(duplicates), markers.size(), idx);
   }
 
   for (auto& t: workers)
     t.join();
 
-  writer.join();
   reader.join();
-
-  return py::array(py::cast(output));
 }

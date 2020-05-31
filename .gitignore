@@ -3,12 +3,12 @@ build/
 .ccls-cache/
 cmake-build-debug/
 instrumentscli*
-
+!CMakeLists.txt
 *.ipynb
 *.ipynb_checkpoints
 *.fasta
 *.fna
-*.txt
+
 *.csv
 *.org
 *.tgz
