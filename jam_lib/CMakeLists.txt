@@ -1,12 +1,16 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.17)
 project(jam_lib LANGUAGES CXX CUDA)
 
 add_subdirectory(pybind11)
+message("::: CXX is ${CMAKE_CXX_COMPILER} :::")
 
-set(CMAKE_C_COMPILER /usr/bin/gcc-9)
-set(CMAKE_CXX_COMPILER /usr/bin/g++-9)
+set(CUDA_SEPARABLE_COMPILATION ON)
+set(CUDA_PROPAGATE_HOST_FLAGS OFF)
+set(CMAKE_CXX_STANDARD 11)
 
-##pybind11 sets -fvisibility=hidden in INTERFACE_COMPILE_OPTIONS on it's module target
+find_package(CUDAToolkit)
+
+# pybind11 sets -fvisibility=hidden in INTERFACE_COMPILE_OPTIONS on it's module target
 get_target_property(modifacecopts module INTERFACE_COMPILE_OPTIONS)
 list(REMOVE_ITEM modifacecopts "-fvisibility=hidden")
 set_target_properties(module PROPERTIES INTERFACE_COMPILE_OPTIONS "${modifacecopts}")
@@ -18,7 +22,7 @@ add_library(jam_lib MODULE
     jam/jam.cu
 )
 
-set_target_properties(jam_lib PROPERTIES 
+set_target_properties(jam_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     CUDA_VISIBILITY_PRESET "hidden"
     CXX_VISIBILITY_PRESET "hidden"
@@ -27,4 +31,4 @@ set_target_properties(jam_lib PROPERTIES
     SUFFIX "${PYTHON_MODULE_EXTENSION}"
 )
 
-target_link_libraries(jam_lib PRIVATE pybind11::module)
+target_link_libraries(jam_lib PRIVATE pybind11::module CUDA::cudart)
