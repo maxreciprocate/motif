@@ -119,7 +119,9 @@ class CandidateMarkerFinder(ExtractionStage):
             Analyzer().run(
                 block_genomes,
                 markers,
-                matrix_result
+                matrix_result, 
+                false, 
+                0
             )
 
             for i, genome_result in enumerate(matrix_result):

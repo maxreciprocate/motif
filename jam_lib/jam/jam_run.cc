@@ -218,6 +218,8 @@ void read_genome_from_numpy(py::handle source, std::string& buff) {
   static const char chars[4] = {'A', 'T', 'C', 'G'};
   auto data = py::array_t<int8_t, py::array::c_style | py::array::forcecast>::ensure(source);
 
+  buff.reserve(data.shape(1));
+
   for (int i = 0; i < data.shape(1); ++i) {
 
     char ch = 'N';
@@ -315,7 +317,6 @@ void run(
   workers.reserve(devicecount);
 
   uint8_t offset = std::min(n_devices, devicecount-1);
-  std::mutex mx;
   for (uint8_t idx = offset; idx < devicecount; ++idx) {
     workers.emplace_back(process, std::ref(sourcequeue), output_matrix, std::ref(table), std::ref(duplicates), markers.size(), idx);
   }
