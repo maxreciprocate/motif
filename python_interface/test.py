@@ -9,7 +9,6 @@ from MarkersSet import MarkersSet
 
 
 def read_genomes(genome_list_filename):
-    #genome_paths_list = []
     with open(genome_list_filename) as genome_list_file:
         genome_paths_list = [
             (
@@ -36,17 +35,19 @@ def test_algorithm(presence_matrix_test):
     candidate_marker_finder = CandidateMarkerFinder("test")
     candidate_marker_finder.marker_set = MarkersSet(markers_list)
     genomes_gen = read_genomes(os.environ['GENOMES_LIST_PATH'])
-    genome_bundle_size = 1
+    genome_bundle_size = 100
     genomes = [None for _ in range(genome_bundle_size)]
     continue_ = True
+    counter = 0
     while continue_:
         try:
-            for k in range(genome_bundle_size):
+            for counter in range(genome_bundle_size):
                 genomes[k] = next(genomes_gen)
         except StopIteration:
             continue_ = False
+            genomes = genomes[:counter]
 
-        genomes[0] = Genome('data/bank/pseudo9909.fasta', open('data/bank/pseudo9909.fasta').read())
+        #genomes[0] = Genome('data/bank/pseudo9909.fasta', open('data/bank/pseudo9909.fasta').read())
         candidate_marker_finder.data_controller = DataController("data_mode", genomes)
 
         candidate_marker_finder.run()

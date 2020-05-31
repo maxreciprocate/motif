@@ -1,3 +1,6 @@
+import pickle
+
+
 class DataConnector:
     def __init__(self, file):
         self.file = file
@@ -6,13 +9,9 @@ class DataConnector:
         '''
         Read data from a file and reformat in to a specific format Returns: either string or numpy.array, dtype=float32
         '''
-        #pickle_file = open(self.file, 'rb')
-        #buff = pickle.load(pickle_file)
-        #pickle_file.close()
-
-        f = open(self.file)
-        buff = f.read()
-        f.close()
+        pickle_file = open(self.file, 'rb')
+        buff = pickle.load(pickle_file)
+        pickle_file.close()
         return buff
 
 #i = DataConnector('./data/bank/pseudo88.fasta')
