@@ -66,16 +66,6 @@ inline void readfile(const std::string &filename, std::string &container) {
   file.close();
 }
 
-const std::array<uint8_t, 85> Lut = {
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-    0x00, 0x02, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04};
-
 void pptable(const std::vector<uint32_t> &table) {
   printf("%4s %3s %3s %3s %3s\n", "A", "C", "G", "T", "X");
   uint32_t bound = std::min(table.size() / 5, 50UL);
@@ -177,26 +167,22 @@ void process (Queue<std::pair<int, std::string>>& sourcequeue,
     printf("(cuda): can't select device #%d with %s\n", deviceidx, cudaGetErrorString(error));
     return;
   }
-
-  cudaMalloc((void **)& d_table, table.size() * sizeof(uint32_t));
-  cudaMemcpy(d_table, table.data(), table.size() * sizeof(uint32_t), cudaMemcpyHostToDevice);
-
-  cudaMalloc((void **)& d_lut, Lut.size());
-  cudaMemcpy(d_lut, &Lut, Lut.size(), cudaMemcpyHostToDevice);
-
+  
+  setup(table);
   // unfancy foreknowledge
   cudaMalloc((void **)& d_source, 150 * 1 << 20);
   cudaMalloc((void **)& d_output, output_matrix.shape(1));
 
   auto pair = sourcequeue.pop();
-
+  float timing = 0;
   while (pair.second.size() > 0) {
 
     auto source = pair.second;
     auto source_idx = pair.first;
     auto output_row = output_matrix.mutable_data(source_idx);
 
-    match(d_table, d_source, source.size(), d_lut, d_output, output_row, output_matrix.shape(1), source);
+    match(d_source, source, d_output, 
+          output_row, output_matrix.shape(1), &timing);
     
     for (const auto &pair : duplicates) {
       if (output_row[pair.first - 1] == 1) {
@@ -208,7 +194,7 @@ void process (Queue<std::pair<int, std::string>>& sourcequeue,
     pair = sourcequeue.pop();
   }
 
-  cudaFree(d_table);
+  cudaFree(d_table);  
   cudaFree(d_lut);
   cudaFree(d_output);
   cudaFree(d_source);
@@ -245,7 +231,12 @@ void run(
   uint64_t nchars = 0;
 
   for (ssize_t i = 0; i < markers_data.size(); ++i) {
+
     auto data = PyUnicode_AsUTF8(markers_data[i].ptr());
+
+    if(!data) {
+      std::cerr << "failed marker" << std::endl;
+    }
 
     markers.emplace_back(data);
 
@@ -269,7 +260,7 @@ void run(
     uint32_t vx = 0;
 
     for (auto &base : marker) {
-      uint32_t idx = 5 * vx + Lut[base] - 1;
+      uint32_t idx = 5 * vx + Lut[base- 0x40] - 1;
 
       if (table[idx] == 0)
         table[idx] = ++edge;
@@ -315,7 +306,6 @@ void run(
 
   std::vector<std::thread> workers;
   workers.reserve(devicecount);
-
   uint8_t offset = std::min(n_devices, devicecount-1);
   for (uint8_t idx = offset; idx < devicecount; ++idx) {
     workers.emplace_back(process, std::ref(sourcequeue), output_matrix, std::ref(table), std::ref(duplicates), markers.size(), idx);

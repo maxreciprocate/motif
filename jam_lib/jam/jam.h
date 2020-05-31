@@ -1,10 +1,19 @@
 #include <string>
 #include <vector>
+#include <array>
+
 
 #ifndef JAM_H
 #define JAM_H
 
-void match(uint32_t *d_table, char* d_source, uint32_t size, uint8_t *d_lut,
-           int8_t *d_output, int8_t* output, int64_t output_size, std::string& source);
+const std::array<uint8_t, 24> Lut = {
+  0x0, 0x1, 0x0, 0x2, 0x0, 0x0, 0x0, 0x3,
+  0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+  0x0, 0x0, 0x0, 0x0, 0x4, 0x0, 0x0, 0x0,
+};
+
+void match(char* d_source, std::string& source, int8_t* d_output, 
+          int8_t* output, int64_t output_size, float* time);
+void setup(std::vector<uint32_t>& table);
 
 #endif

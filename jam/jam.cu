@@ -7,6 +7,7 @@
 
 #define noteError(msg) \
   { noteErrorM((msg), __FILE__, __LINE__); }
+
 inline void noteErrorM(cudaError_t code, const char* file, int line) {
   if (code != cudaSuccess) fprintf(stderr, "(cuda): %s %s %d\n", cudaGetErrorString(code), file, line);
 }
@@ -51,7 +52,8 @@ void setup(std::vector<uint32_t>& table) {
   noteError(cudaBindTexture(0, t_table, d_table, table.size() * sizeof(uint32_t)));
 }
 
-void match(char* d_source, std::string& source, uint8_t* d_output, std::vector<uint8_t>& output, float* time) {
+void match(char* d_source, std::string& source, int8_t* d_output, 
+          int8_t* output, int64_t output_size, float* time) {
   cudaEvent_t start, stop;
   cudaEventCreate(&start);
   cudaEventCreate(&stop);
@@ -60,12 +62,12 @@ void match(char* d_source, std::string& source, uint8_t* d_output, std::vector<u
   dim3 dimBlock(1024);
 
   cudaMemcpy(d_source, source.data(), source.size(), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_output, output.data(), output.size(), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_output, output, output_size, cudaMemcpyHostToDevice);
 
   cudaEventRecord(start, 0);
   launch<<<dimGrid, dimBlock>>>(d_source, source.size(), d_output);
 
-  cudaMemcpy(output.data(), d_output, output.size(), cudaMemcpyDeviceToHost);
+  cudaMemcpy(output, d_output, output_size, cudaMemcpyDeviceToHost);
   cudaEventRecord(stop, 0);
   cudaEventSynchronize(stop);
   cudaEventElapsedTime(time, start, stop);

@@ -8,8 +8,9 @@ import subprocess
 def verify(genomefnsource, markers_fname, res_file_name):
   
   start = time.time()
-  subprocess.run(["./jam/jam", genomefnsource, markers_file, res_file_name], stdout=subprocess.PIPE)
+  # subprocess.run(["./jam/jam", genomefnsource, markers_file, res_file_name], stdout=subprocess.PIPE)
   now = time.time()
+  print("start reading")
   markers = []
   genomes = []
   genome_names = []
@@ -30,10 +31,12 @@ def verify(genomefnsource, markers_fname, res_file_name):
 
   matrix = np.zeros((len(genomes),len(markers)), dtype=np.int8)
   print(now - start)
-  jam_lib.run(genomes, markers, matrix, 1)
+  
+  jam_lib.run(genomes, markers, matrix, 1, False)
+  
   print(time.time() - now)
   print("runned")
-  print(matrix)
+  # print(matrix)
   with open(res_file_name, "r") as f:
     lines = f.readlines()
     for j in range(matrix.shape[0]):
@@ -45,7 +48,6 @@ def verify(genomefnsource, markers_fname, res_file_name):
             if int(ch) != row[i]:
               print("Failed for ", name)
               break
-            
           print(name) 
     print("Verified")
   return 0
