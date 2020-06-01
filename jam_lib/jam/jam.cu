@@ -9,7 +9,10 @@
   { noteErrorM((msg), __FILE__, __LINE__); }
 
 inline void noteErrorM(cudaError_t code, const char* file, int line) {
-  if (code != cudaSuccess) fprintf(stderr, "(cuda): %s %s %d\n", cudaGetErrorString(code), file, line);
+  if (code != cudaSuccess) {
+    fprintf(stderr, "(cuda error): %s %s %d\n", cudaGetErrorString(code), file, line);
+    exit(1);
+  }
 }
 
 texture<uint32_t, cudaTextureType1D> t_table;
@@ -33,7 +36,7 @@ __global__ void launch(char* d_source, uint32_t size, int8_t* d_output) {
 
       uint32_t wordidx = tex1Dfetch(t_table, 5 * vx + 4);
 
-      if (wordidx != 0) d_output[wordidx - 1] = 0x31;
+      if (wordidx != 0) d_output[wordidx - 1] = 1;
     }
   }
 }
@@ -52,26 +55,14 @@ void setup(std::vector<uint32_t>& table) {
   noteError(cudaBindTexture(0, t_table, d_table, table.size() * sizeof(uint32_t)));
 }
 
-void match(char* d_source, std::string& source, int8_t* d_output, 
-          int8_t* output, int64_t output_size, float* time) {
-  cudaEvent_t start, stop;
-  cudaEventCreate(&start);
-  cudaEventCreate(&stop);
-
+void match(char* d_source, std::string& source, int8_t* d_output, int8_t* output, int64_t output_size) {
   dim3 dimGrid(64000);
   dim3 dimBlock(1024);
 
   cudaMemcpy(d_source, source.data(), source.size(), cudaMemcpyHostToDevice);
   cudaMemcpy(d_output, output, output_size, cudaMemcpyHostToDevice);
 
-  cudaEventRecord(start, 0);
   launch<<<dimGrid, dimBlock>>>(d_source, source.size(), d_output);
 
   cudaMemcpy(output, d_output, output_size, cudaMemcpyDeviceToHost);
-  cudaEventRecord(stop, 0);
-  cudaEventSynchronize(stop);
-  cudaEventElapsedTime(time, start, stop);
-
-  cudaEventDestroy(start);
-  cudaEventDestroy(stop);
 }

@@ -12,8 +12,7 @@ const std::array<uint8_t, 24> Lut = {
   0x0, 0x0, 0x0, 0x0, 0x4, 0x0, 0x0, 0x0,
 };
 
-void match(char* d_source, std::string& source, int8_t* d_output, 
-          int8_t* output, int64_t output_size, float* time);
+void match(char* d_source, std::string& source, int8_t* d_output, int8_t* output, int64_t output_size);
 void setup(std::vector<uint32_t>& table);
 
 #endif
