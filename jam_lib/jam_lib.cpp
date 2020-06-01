@@ -1,19 +1,14 @@
 #include <pybind11/pybind11.h>
-#include <sstream>
-// #include "jam/jam.h"
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
-#include <stdlib.h> 
-#include <cuda_runtime.h>
-
-namespace py = pybind11;
+#include <stdlib.h>
 
 void run(
-  const py::list genome_data,
+  const pybind11::list genome_data,
   const uint64_t max_genome_length,
-  const py::list markers_data,
-  py::array_t<int8_t> output_matrix,
-  const py::lsit n_devices,
+  const pybind11::list markers_data,
+  pybind11::array_t<int8_t> output_matrix,
+  const pybind11::list gpu_devices,
   bool is_numpy
 );
 
