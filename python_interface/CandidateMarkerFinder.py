@@ -121,7 +121,7 @@ class CandidateMarkerFinder(ExtractionStage):
                 block_genomes,
                 max_genome_length,
                 markers,
-                0,
+                [1,1,1,1],
                 False
             )
 

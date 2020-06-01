@@ -17,7 +17,7 @@ class Genome:
     def get_genome_numeric_data(self):
         """
         Returns:
-            numpy.array:    shape=(4,genome_length), dtype=float32, contains whole genome data
+            numpy.array:    shape=(4,genome_length), dtype=int8, contains whole genome data
             dict:           some metadata
         """
         return

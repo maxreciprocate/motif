@@ -13,7 +13,7 @@ void run(
   const uint64_t max_genome_length,
   const py::list markers_data,
   py::array_t<int8_t> output_matrix,
-  int n_devices,
+  const py::lsit n_devices,
   bool is_numpy
 );
 
