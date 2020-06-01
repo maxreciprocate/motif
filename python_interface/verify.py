@@ -9,7 +9,7 @@ import run
 
 def verify(genomefnsource, markers_fname, res_file_name):
   start_jam = time.time()
-  subprocess.run(["./jam/jam", genomefnsource, markers_file, res_file_name], stdout=subprocess.PIPE)
+  subprocess.run(["./jam/jam", genomefnsource, markers_fname, res_file_name], stdout=subprocess.PIPE)
   print("Jam time:" , time.time() - start_jam)
 
   start_jam_lib = time.time()
