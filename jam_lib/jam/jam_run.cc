@@ -1,4 +1,3 @@
-// #include "jam_run.h"
 #include "stdio.h"
 #include "string.h"
 #include <array>
@@ -8,7 +7,6 @@
 #include <fstream> 
 #include <iostream>
 #include <string>
-// #include <string_view>
 #include <unordered_map>
 #include <vector>
 #include <thread>
@@ -21,7 +19,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
-#include <mutex>
 
 namespace py = pybind11;
 
@@ -167,7 +164,7 @@ void process (Queue<std::pair<int, std::string>>& sourcequeue,
     printf("(cuda): can't select device #%d with %s\n", deviceidx, cudaGetErrorString(error));
     return;
   }
-  
+  std::cout << "table size: " << table.size() << std::endl;
   setup(table);
   // unfancy foreknowledge
   cudaMalloc((void **)& d_source, 150 * 1 << 20);
@@ -221,6 +218,7 @@ void read_genome_from_numpy(py::handle source, std::string& buff) {
 
 void run(
   const py::list genome_data,
+  const uint64_t max_genome_length,
   const py::list markers_data,
   py::array_t<int8_t> output_matrix,
   int n_devices,
@@ -228,6 +226,8 @@ void run(
 )
 {
   std::vector<std::string> markers;
+  markers.reserve(markers_data.size());
+
   uint64_t nchars = 0;
 
   for (ssize_t i = 0; i < markers_data.size(); ++i) {
@@ -246,7 +246,8 @@ void run(
   uint32_t tablesize = std::ceil(
       nchars -
       1 / 2 * markers.size() * std::log2(markers.size() / std::sqrt(4)) + 24);
-
+  std::cout << "markers.size(): " << markers.size() << std::endl;
+  std::cout << "tablesize :" << tablesize << std::endl;
   std::vector<uint32_t> table(tablesize * 5, 0);
 
   uint32_t edge = 0;
@@ -260,7 +261,7 @@ void run(
     uint32_t vx = 0;
 
     for (auto &base : marker) {
-      uint32_t idx = 5 * vx + Lut[base- 0x40] - 1;
+      uint32_t idx = 5 * vx + Lut[base - 0x40] - 1;
 
       if (table[idx] == 0)
         table[idx] = ++edge;

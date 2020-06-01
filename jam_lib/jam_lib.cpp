@@ -10,6 +10,7 @@ namespace py = pybind11;
 
 void run(
   const py::list genome_data,
+  const uint64_t max_genome_length,
   const py::list markers_data,
   py::array_t<int8_t> output_matrix,
   int n_devices,
