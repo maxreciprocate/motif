@@ -99,36 +99,31 @@ class CandidateMarkerFinder(ExtractionStage):
         block_size = 100
 
         block_genomes = [None for _ in range(block_size)]
-        block_genomes_names = [None for _ in range(block_size)]
 
         self._presence_matrix = PresenceMatrix()
         self._presence_matrix.initialize(genomes, len(markers))
 
         while counter < len(genomes):
-            # fill blocks with data
+            # fill block with data
             block_counter = 0
             while block_counter < block_size and counter < len(genomes):
                 block_genomes[block_counter] = genomes[block_counter].get_genome_string_data()
-                block_genomes_names[block_counter] = genomes[block_counter].name
                 block_counter += 1
                 counter += 1
 
-            # slice blocks if needed
+            # slice block if needed
             if block_counter < block_size - 1:
                 block_genomes = block_genomes[:block_counter]
-                block_genomes_names = block_genomes_names[:block_counter]
 
-            matrix = Analyzer().run(
-                block_genomes_names,
+            matrix_result = Analyzer().run(
                 block_genomes,
                 markers,
                 0,
                 False
             )
-            for (genome_name, genome_result) in matrix:
-                for genome in genomes:
-                    if genome.name == genome_name:
-                        self._presence_matrix.add_all_positions_for_genome(genome, genome_result)
+
+            for i, genome_result in enumerate(matrix_result):
+                self._presence_matrix.add_all_positions_for_genome(genomes[counter - block_counter + i], genome_result)
 
         self.completed = True
 
