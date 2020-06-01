@@ -52,8 +52,7 @@ void setup(std::vector<uint32_t>& table) {
   noteError(cudaBindTexture(0, t_table, d_table, table.size() * sizeof(uint32_t)));
 }
 
-void match(char* d_source, std::string& source, int8_t* d_output, 
-          int8_t* output, int64_t output_size, float* time) {
+void match(char* d_source, std::string& source, uint8_t* d_output, std::vector<uint8_t>& output, float* time) {
   cudaEvent_t start, stop;
   cudaEventCreate(&start);
   cudaEventCreate(&stop);
@@ -62,12 +61,12 @@ void match(char* d_source, std::string& source, int8_t* d_output,
   dim3 dimBlock(1024);
 
   cudaMemcpy(d_source, source.data(), source.size(), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_output, output, output_size, cudaMemcpyHostToDevice);
+  cudaMemcpy(d_output, output.data(), output.size(), cudaMemcpyHostToDevice);
 
   cudaEventRecord(start, 0);
   launch<<<dimGrid, dimBlock>>>(d_source, source.size(), d_output);
 
-  cudaMemcpy(output, d_output, output_size, cudaMemcpyDeviceToHost);
+  cudaMemcpy(output.data(), d_output, output.size(), cudaMemcpyDeviceToHost);
   cudaEventRecord(stop, 0);
   cudaEventSynchronize(stop);
   cudaEventElapsedTime(time, start, stop);
