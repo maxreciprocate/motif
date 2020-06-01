@@ -198,7 +198,7 @@ void read_genome_from_numpy(pybind11::handle source, std::string& buff) {
 
 void run(const pybind11::list genome_data, uint64_t max_genome_length,
          const pybind11::list markers_data, pybind11::array_t<int8_t> output_matrix,
-         const pybind11::list gpu_devices, bool is_numpy) {
+         const pybind11::array_t<int> gpu_devices, bool is_numpy) {
 
   std::vector<std::string> markers;
   markers.reserve(markers_data.size());
@@ -281,9 +281,9 @@ void run(const pybind11::list genome_data, uint64_t max_genome_length,
 
   std::vector<std::thread> workers;
   workers.reserve(devicecount);
-
+  auto devices = gpu_devices.data();
   for (uint8_t idx = 0; idx < devicecount; ++idx) {
-    if (gpu_devices[idx])
+    if (devices[idx])
       workers.emplace_back(process, std::ref(sourcequeue), max_genome_length, output_matrix, std::ref(table), std::ref(duplicates), markers.size(), idx);
   }
 
