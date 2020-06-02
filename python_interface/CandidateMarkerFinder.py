@@ -108,7 +108,7 @@ class CandidateMarkerFinder(ExtractionStage):
             block_counter = 0
             max_genome_length = 0
             while block_counter < block_size and counter < len(genomes):
-                block_genomes[block_counter] = genomes[block_counter].get_genome_string_data()
+                block_genomes[block_counter] = genomes[counter].get_genome_string_data()
                 max_genome_length = max(max_genome_length, len(block_genomes[block_counter]))
                 block_counter += 1
                 counter += 1
