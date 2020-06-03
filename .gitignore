@@ -4,6 +4,8 @@ build/
 cmake-build-debug/
 instrumentscli*
 !CMakeLists.txt
+*.egg
+*.txt
 *.ipynb
 *.ipynb_checkpoints
 *.fasta

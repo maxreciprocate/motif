@@ -1,8 +1,9 @@
 #!/usr/bin/env julia
 contenders = [
-    ("bassline", "bassline/double-build.jl"),
+    #("bassline", "bassline/double-build.jl"),
     ("groove", "motif/build/groove"),
-    ("jam", "jam/jam")
+    #("jam", "jam/jam")
+    ("jamlib", "python_interface/run.py")
 ]
 
 chmod.(last.(contenders), 0o777)
@@ -52,11 +53,11 @@ function benchmark(sources::Vector{String})
 end
 
 benchmarks = [
-    ["data/1genomes.txt", "data/8000markers.csv"],
-    ["data/10genomes.txt", "data/80000markers.csv"],
-    ["data/100genomes.txt", "data/800000markers.csv"],
-    ["data/1000genomes.txt", "data/3000000markers.csv"],
-    ["data/1000genomes.txt", "data/8000000markers.csv"],
+    #["data/1genomes.txt", "data/8000markers.csv"],
+    #["data/10genomes.txt", "data/80000markers.csv"],
+    #["data/100genomes.txt", "data/800000markers.csv"],
+    #["data/1000genomes.txt", "data/3000000markers.csv"],
+    ["data/1genomes.txt", "data/markers.csv"],
 ]
 
 if length(ARGS) > 0
@@ -73,6 +74,7 @@ if length(ARGS) > 0
 end
 
 ENV["JULIA_NUM_THREADS"] = ENV["PYPY_NUM_THREADS"] = 4
+ENV["SAVE_RESULT_TO_FILE"] = 1
 
 results = benchmark.(benchmarks)
 
