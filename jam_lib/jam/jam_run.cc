@@ -133,6 +133,7 @@ void process (Queue<std::pair<int, std::string>>& sourcequeue,
               uint64_t max_genome_length,
               pybind11::array_t<int8_t> output_matrix,
               std::vector<uint32_t>& table,
+              size_t tablesize,
               std::unordered_map<uint32_t, std::vector<uint32_t>>& duplicates,
               uint64_t markerssize, uint8_t deviceidx) {
 
@@ -149,7 +150,7 @@ void process (Queue<std::pair<int, std::string>>& sourcequeue,
     return;
   }
 
-  setup(table);
+  setup(d_table, table, tablesize);
 
   cudaMalloc((void **)& d_source, max_genome_length);
   cudaMalloc((void **)& d_output, output_matrix.shape(1));
@@ -217,11 +218,11 @@ void run(const pybind11::list genome_data, uint64_t max_genome_length,
     nchars += strlen(data);
   }
 
-  uint32_t tablesize = std::ceil(
+  size_t tablesize = 5 * std::ceil(
       nchars -
       1 / 2 * markers.size() * std::log2(markers.size() / std::sqrt(4)) + 24);
 
-  std::vector<uint32_t> table(tablesize * 5, 0);
+  std::vector<uint32_t> table(tablesize, 0);
 
   uint32_t edge = 0;
   uint32_t wordidx = 0;
@@ -284,7 +285,7 @@ void run(const pybind11::list genome_data, uint64_t max_genome_length,
   auto devices = gpu_devices.data();
   for (uint8_t idx = 0; idx < devicecount; ++idx) {
     if (devices[idx])
-      workers.emplace_back(process, std::ref(sourcequeue), max_genome_length, output_matrix, std::ref(table), std::ref(duplicates), markers.size(), idx);
+      workers.emplace_back(process, std::ref(sourcequeue), max_genome_length, output_matrix, std::ref(table), tablesize, std::ref(duplicates), markers.size(), idx);
   }
 
   for (auto& t: workers)

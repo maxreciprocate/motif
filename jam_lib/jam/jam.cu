@@ -11,7 +11,6 @@
 inline void noteErrorM(cudaError_t code, const char* file, int line) {
   if (code != cudaSuccess) {
     fprintf(stderr, "(cuda error): %s %s %d\n", cudaGetErrorString(code), file, line);
-    exit(1);
   }
 }
 
@@ -41,18 +40,21 @@ __global__ void launch(char* d_source, uint32_t size, int8_t* d_output) {
   }
 }
 
-void setup(std::vector<uint32_t>& table) {
+void setup(uint32_t* d_table, std::vector<uint32_t>& table, size_t tablesize) {
   uint8_t* d_translation;
 
   noteError(cudaMalloc((void**)&d_translation, Lut.size()));
   noteError(cudaMemcpy(d_translation, &Lut, Lut.size(), cudaMemcpyHostToDevice));
   noteError(cudaBindTexture(0, t_translation, d_translation, Lut.size()));
 
-  uint32_t* d_table;
+  noteError(cudaMalloc((void**)&d_table, tablesize * sizeof(uint32_t)));
+  noteError(cudaMemcpy(d_table, table.data(), tablesize * sizeof(uint32_t), cudaMemcpyHostToDevice));
 
-  noteError(cudaMalloc((void**)&d_table, table.size() * sizeof(uint32_t)));
-  noteError(cudaMemcpy(d_table, table.data(), table.size() * sizeof(uint32_t), cudaMemcpyHostToDevice));
-  noteError(cudaBindTexture(0, t_table, d_table, table.size() * sizeof(uint32_t)));
+  printf("d_table: %d\n", d_table);
+
+
+
+  noteError(cudaBindTexture(0, t_table, d_table, 0));
 }
 
 void match(char* d_source, std::string& source, int8_t* d_output, int8_t* output, int64_t output_size) {
