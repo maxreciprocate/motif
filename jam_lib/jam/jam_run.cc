@@ -133,7 +133,6 @@ void process (Queue<std::pair<int, std::string>>& sourcequeue,
               uint64_t max_genome_length,
               pybind11::array_t<int8_t> output_matrix,
               std::vector<uint32_t>& table,
-              size_t tablesize,
               std::unordered_map<uint32_t, std::vector<uint32_t>>& duplicates,
               uint64_t markerssize, uint8_t deviceidx) {
 
@@ -142,7 +141,9 @@ void process (Queue<std::pair<int, std::string>>& sourcequeue,
   char *d_source;
   int8_t *d_output;
 
-  printf("setting up %d device\n", deviceidx);
+  if (debug)
+    printf("setting up %d device\n", deviceidx);
+
   auto error = cudaSetDevice(deviceidx);
 
   if (error != cudaSuccess) {
@@ -150,7 +151,7 @@ void process (Queue<std::pair<int, std::string>>& sourcequeue,
     return;
   }
 
-  setup(d_table, table, tablesize);
+  setup(d_table, table);
 
   cudaMalloc((void **)& d_source, max_genome_length);
   cudaMalloc((void **)& d_output, output_matrix.shape(1));
@@ -274,6 +275,7 @@ void run(const pybind11::list genome_data, uint64_t max_genome_length,
   }};
 
   int devicecount = 0;
+
   cudaError_t error = cudaGetDeviceCount(&devicecount);
   if (error != cudaSuccess) {
     printf("(cuda): can't get a grip upon devices with %s\n", cudaGetErrorString(error));
@@ -282,10 +284,12 @@ void run(const pybind11::list genome_data, uint64_t max_genome_length,
 
   std::vector<std::thread> workers;
   workers.reserve(devicecount);
+
   auto devices = gpu_devices.data();
+
   for (uint8_t idx = 0; idx < devicecount; ++idx) {
     if (devices[idx])
-      workers.emplace_back(process, std::ref(sourcequeue), max_genome_length, output_matrix, std::ref(table), tablesize, std::ref(duplicates), markers.size(), idx);
+      workers.emplace_back(process, std::ref(sourcequeue), max_genome_length, output_matrix, std::ref(table), std::ref(duplicates), markers.size(), idx);
   }
 
   for (auto& t: workers)

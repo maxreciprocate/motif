@@ -6,6 +6,8 @@
 #ifndef JAM_H
 #define JAM_H
 
+#define debug 0
+
 const std::array<uint8_t, 24> Lut = {
   0x0, 0x1, 0x0, 0x2, 0x0, 0x0, 0x0, 0x3,
   0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
@@ -13,6 +15,6 @@ const std::array<uint8_t, 24> Lut = {
 };
 
 void match(char* d_source, std::string& source, int8_t* d_output, int8_t* output, int64_t output_size);
-void setup(uint32_t* d_table, std::vector<uint32_t>& table, size_t tablesize);
+void setup(uint32_t* d_table, std::vector<uint32_t>& table);
 
 #endif

@@ -40,31 +40,27 @@ __global__ void launch(char* d_source, uint32_t size, int8_t* d_output) {
   }
 }
 
-void setup(uint32_t* d_table, std::vector<uint32_t>& table, size_t tablesize) {
+void setup(uint32_t* d_table, std::vector<uint32_t>& table) {
   uint8_t* d_translation;
 
   noteError(cudaMalloc((void**)&d_translation, Lut.size()));
   noteError(cudaMemcpy(d_translation, &Lut, Lut.size(), cudaMemcpyHostToDevice));
-  noteError(cudaBindTexture(0, t_translation, d_translation, Lut.size()));
+  noteError(cudaBindTexture(0, t_translation, d_translation));
 
-  noteError(cudaMalloc((void**)&d_table, tablesize * sizeof(uint32_t)));
-  noteError(cudaMemcpy(d_table, table.data(), tablesize * sizeof(uint32_t), cudaMemcpyHostToDevice));
+  noteError(cudaMalloc((void**)&d_table, table.size() * sizeof(uint32_t)));
+  noteError(cudaMemcpy(d_table, table.data(), table.size() * sizeof(uint32_t), cudaMemcpyHostToDevice));
 
-  printf("d_table: %d\n", d_table);
-
-
-
-  noteError(cudaBindTexture(0, t_table, d_table, 0));
+  noteError(cudaBindTexture(0, t_table, d_table));
 }
 
 void match(char* d_source, std::string& source, int8_t* d_output, int8_t* output, int64_t output_size) {
-  dim3 dimGrid(64000);
+  dim3 dimGrid(std::max(source.size() >> 11, static_cast<size_t>(32768)));
   dim3 dimBlock(1024);
 
-  cudaMemcpy(d_source, source.data(), source.size(), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_output, output, output_size, cudaMemcpyHostToDevice);
+  noteError(cudaMemcpy(d_source, source.data(), source.size(), cudaMemcpyHostToDevice));
+  noteError(cudaMemcpy(d_output, output, output_size, cudaMemcpyHostToDevice));
 
   launch<<<dimGrid, dimBlock>>>(d_source, source.size(), d_output);
 
-  cudaMemcpy(output, d_output, output_size, cudaMemcpyDeviceToHost);
+  noteError(cudaMemcpy(output, d_output, output_size, cudaMemcpyDeviceToHost));
 }

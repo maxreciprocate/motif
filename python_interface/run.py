@@ -12,7 +12,6 @@ from Genome import Genome
 from DataConnector import DataConnector
 from DataController import DataController
 
-
 def run(sources_file, markers_file, output_file):
 
     prefix = "/".join(sources_file.split('/')[:-1])
@@ -23,8 +22,6 @@ def run(sources_file, markers_file, output_file):
         print("sources_file must have at least one source filepath")
         exit(1)
 
-
-    print("building")
     with open(markers_file) as file:
         markers = [line[1] for line in csv.reader(file)]
 
@@ -45,9 +42,7 @@ def run(sources_file, markers_file, output_file):
 
     candidate_marker_finder.data_controller = DataController("data_type", genome_list)
 
-    start_time = time.time()
     candidate_marker_finder.run()
-    print(time.time() - start_time)
 
     output = candidate_marker_finder._presence_matrix._presence_matrix
 
@@ -65,7 +60,5 @@ if __name__ == '__main__':
     if len(sys.argv) != 4:
         print(f"usage: {sys.argv[0]} <sources_file> <markers_file> <output_file>")
         exit(1)
-
-    #_, sources_file, markers_file, output_file = sys.argv
 
     run(*sys.argv[1:])

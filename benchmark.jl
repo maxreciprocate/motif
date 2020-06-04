@@ -2,7 +2,7 @@
 contenders = [
     #("bassline", "bassline/double-build.jl"),
     ("groove", "motif/build/groove"),
-    #("jam", "jam/jam")
+    ("jam", "jam/jam"),
     ("jamlib", "python_interface/run.py")
 ]
 
@@ -53,7 +53,7 @@ function benchmark(sources::Vector{String})
 end
 
 benchmarks = [
-    #["data/1genomes.txt", "data/8000markers.csv"],
+    ["data/1genomes.txt", "data/8000markers.csv"],
     #["data/10genomes.txt", "data/80000markers.csv"],
     #["data/100genomes.txt", "data/800000markers.csv"],
     #["data/1000genomes.txt", "data/3000000markers.csv"],

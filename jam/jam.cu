@@ -43,13 +43,13 @@ void setup(std::vector<uint32_t>& table) {
 
   noteError(cudaMalloc((void**)&d_translation, Lut.size()));
   noteError(cudaMemcpy(d_translation, &Lut, Lut.size(), cudaMemcpyHostToDevice));
-  noteError(cudaBindTexture(0, t_translation, d_translation, Lut.size()));
+  noteError(cudaBindTexture(0, t_translation, d_translation));
 
   uint32_t* d_table;
 
   noteError(cudaMalloc((void**)&d_table, table.size() * sizeof(uint32_t)));
   noteError(cudaMemcpy(d_table, table.data(), table.size() * sizeof(uint32_t), cudaMemcpyHostToDevice));
-  noteError(cudaBindTexture(0, t_table, d_table, table.size() * sizeof(uint32_t)));
+  noteError(cudaBindTexture(0, t_table, d_table));
 }
 
 void match(char* d_source, std::string& source, uint8_t* d_output, std::vector<uint8_t>& output, float* time) {

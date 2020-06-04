@@ -13,6 +13,3 @@ class DataConnector:
         buff = f.read()
         f.close()
         return buff
-
-#i = DataConnector('./data/bank/pseudo88.fasta')
-#print(i.get_data())
