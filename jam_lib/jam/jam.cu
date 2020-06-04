@@ -16,6 +16,8 @@ inline void noteErrorM(cudaError_t code, const char* file, int line) {
 
 texture<uint32_t, cudaTextureType1D> t_table;
 texture<uint8_t, cudaTextureType1D> t_translation;
+cudaChannelFormatDesc uint8Desc = cudaCreateChannelDesc<uint8_t>();
+cudaChannelFormatDesc uint32Desc = cudaCreateChannelDesc<uint32_t>();
 
 __global__ void launch(char* d_source, uint32_t size, int8_t* d_output) {
   uint32_t stride = gridDim.x * blockDim.x;
@@ -45,12 +47,12 @@ void setup(uint32_t* d_table, std::vector<uint32_t>& table) {
 
   noteError(cudaMalloc((void**)&d_translation, Lut.size()));
   noteError(cudaMemcpy(d_translation, &Lut, Lut.size(), cudaMemcpyHostToDevice));
-  noteError(cudaBindTexture(0, t_translation, d_translation));
+  noteError(cudaBindTexture(0, t_translation, d_translation, uint8Desc, Lut.size()));
 
   noteError(cudaMalloc((void**)&d_table, table.size() * sizeof(uint32_t)));
   noteError(cudaMemcpy(d_table, table.data(), table.size() * sizeof(uint32_t), cudaMemcpyHostToDevice));
 
-  noteError(cudaBindTexture(0, t_table, d_table));
+  noteError(cudaBindTexture(0, t_table, d_table, uint32Desc, table.size() * sizeof(uint32_t)));
 }
 
 void match(char* d_source, std::string& source, int8_t* d_output, int8_t* output, int64_t output_size) {
