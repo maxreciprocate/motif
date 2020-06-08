@@ -6,8 +6,8 @@ sys.path.append("python_interface")
 
 from python_interface.run import run
 
-sources_file = "data/1000genomes.txt"
-markers_file = "data/markers.csv"
+sources_file = "data/10genomes.txt"
+markers_file = "data/8000markers.csv"
 
 with open(sources_file) as file:
   genome_d = {name[5:-1]: index for index, name in enumerate(file.readlines())}
@@ -44,4 +44,3 @@ np.testing.assert_array_equal(
 )
 
 print("All results agreed")
-

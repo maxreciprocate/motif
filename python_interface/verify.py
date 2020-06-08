@@ -1,11 +1,10 @@
-import jam_lib
+import motif
 import numpy as np
 import sys
 import time
 import sys
 import subprocess
 import run
-
 
 def verify(genomefnsource, markers_fname, res_file_name):
   start_jam = time.time()
@@ -41,4 +40,3 @@ if __name__ == "__main__":
       exit(1)
 
     verify(*sys.argv[1:])
-

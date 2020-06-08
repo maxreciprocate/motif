@@ -1,11 +1,10 @@
 import numpy as np
-import jam_lib as jam
-
+import motif
 
 class Analyzer:
     def run(self, np_genomes_array, max_genome_length, np_markers_array, gpu_devices, is_numpy):
         output = np.zeros((len(np_genomes_array), len(np_markers_array)), dtype=np.int8)
-        jam.run(np_genomes_array, max_genome_length, np_markers_array, output, gpu_devices, is_numpy)
+        motif.run(np_genomes_array, max_genome_length, np_markers_array, output, gpu_devices, is_numpy)
         return output
 
 if __name__ == "__main__":

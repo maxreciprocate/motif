@@ -1,102 +1,137 @@
-#include <pybind11/pybind11.h>
-#include "motif/motif.h"
-#include "motif/src/readers/file_readers.h"
+#include <fstream>
+#include <iostream>
 #include <sstream>
-// #include "jam/jam.h"
-#include <pybind11/stl.h>
-#include <pybind11/numpy.h>
-#include <stdlib.h> 
-// #include <cuda_runtime.h>
+#include <cmath>
+#include <thread>
+#include <mutex>
+#include <cstring>
+#include "motif.h"
+#include "src/readers/file_readers.h"
+#include "src/queue/ConcurrentQueue.h"
 
-namespace py = pybind11;
+#define REQUIRED_ARGS_AMOUNT        4
+#define GENOMES_FILE_ARG            1
+#define MARKERS_FILE_ARG            2
+#define OUTPUT_FILE_ARG             3
+#define THREAD_NUM_ARG              4
 
-void read_markers_wraper(MARKERS_DATA* markers_data, const std::string& filename) {
-    std::ifstream f_markers(filename);
+inline std::chrono::high_resolution_clock::time_point get_current_time_fenced() {
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+    auto res_time = std::chrono::high_resolution_clock::now();
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+    return res_time;
+}
 
-    read_markers(markers_data, f_markers);
+template<class D>
+inline long long to_ms(const D& d) {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(d).count();
+}
+
+int main(int argc, char** argv) {
+    if (argc != REQUIRED_ARGS_AMOUNT) {
+        std::cerr << "Wrong arguments amount (expected 4). Usage: \n"
+                     "<program> <genomes-filename> <markers-filename>"
+                     "<output-filename>\n" << std::endl;
+        return 1;
+    }
+
+    const uint8_t threads_num = 4;
+
+    std::string f_genomes_path(argv[GENOMES_FILE_ARG]);
+
+    // read genomes paths
+    std::vector<std::string> genomes_paths;
+    read_genome_paths(f_genomes_path, genomes_paths);
+
+    // read markers
+    std::ifstream f_markers(argv[MARKERS_FILE_ARG]);
+    if (!f_markers.good()) {
+        std::cerr << "Cannot read file: " << argv[MARKERS_FILE_ARG] << std::endl;
+        return 1;
+    }
+
+    const MARKERS_DATA markersData = read_markers(f_markers);
 
     f_markers.close();
+    const AUTOMATON automaton = create_automaton(markersData);
 
-}
+    // find matches
+    ConcurrentQueue<file_entry> reading_queue;
+    ConcurrentQueue<file_entry> writing_queue;
 
-std::string AUTOMATON::toString() {
-    std::stringstream ss;
-    ss << "Automatons:\t" << std::endl;
-        
-    for (auto& i : this->automaton) ss << i << std::endl;
-        
-    ss << "Output links:\t" << std::endl;
+    std::thread producer([&]() {
+        for (auto& file: genomes_paths) {
+            file_entry new_file_entry(file);
+            read_file(file, new_file_entry);
+            reading_queue.push(new_file_entry);
+        }
+        // add poisson pills
+        for (int i = 0; i < threads_num; ++i) {
+            file_entry poisson_pill;
+            reading_queue.push(poisson_pill);
+        }
+    });
 
-    for (auto& i : this->output_links) 
-        for (auto& j : i) ss << j << std::endl;
-        ss << std::endl;
-    
-    return ss.str();
-}
+    // create consumers
+    std::vector<std::thread> threads;
+    threads.reserve(threads_num);
+    std::mutex file_write_mutex;
+    std::ofstream result_file(argv[OUTPUT_FILE_ARG]);
 
-int AUTOMATON::size() {
-  return this->automaton.size();
-}
+    if (!result_file.good()) {
+        std::cerr << "Cannot open file: " << argv[OUTPUT_FILE_ARG] << std::endl;
+        return 1;
+    }
 
-AUTOMATON create_automaton_dummy(const MARKERS_DATA& markersData) {
-  AUTOMATON automaton{};
-  for(auto& i: markersData.markers){
-    automaton.automaton.push_back(rand());
-    for(int i =0; i<1000000;++i){
-      continue;
-    };
-  }
+    for (int i = 0; i < threads_num; ++i) {
+        threads.emplace_back(
+            [&, i]() {
 
-  return automaton;
-}
+                auto new_file_entry = reading_queue.pop();
+                // die on poisson pill
+                while (!new_file_entry.file_name.empty()) {
 
-const py::array_t<int8_t>& match_dummy(
-  const std::string &source,
-  const AUTOMATON& automaton,
-  py::array_t<int8_t>& output
-) {
+                    file_entry result_file_entry(new_file_entry.file_name.data());
+                    result_file_entry.content.resize(markersData.markers.size());
 
-  for (int i=0; i < automaton.automaton.size(); ++i) {
-    *output.mutable_data(i) = 1;
-  }
+                    std::memset(result_file_entry.content.data(), '0', markersData.markers.size());
 
-  return output;
-}
+                    match(
+                        new_file_entry.content,
+                        automaton.automaton,
+                        automaton.output_links,
+                        result_file_entry.content
+                    );
 
+                    writing_queue.push(result_file_entry);
+                    new_file_entry = reading_queue.pop();
+                }
+                file_entry poisson_pill("");
+                writing_queue.push(poisson_pill);
+            }
+        );
+    }
 
+    // create saver
+    auto poisson_pills_counter = 0;
+    std::thread saver([&]() {
+        while (poisson_pills_counter != threads_num) {
+            auto new_file_entry = writing_queue.pop();
+            if (new_file_entry.file_name.empty()) {
+                poisson_pills_counter++;
+            } else {
+                result_file << std::filesystem::path(new_file_entry.file_name).filename().c_str() << ' ' << new_file_entry.content << std::endl;
+            }
+        }
+    });
 
+    // close all threads
+    producer.join();
+    for (auto& th: threads)
+        th.join();
 
-PYBIND11_MODULE(groove, m) {
-    py::class_<AUTOMATON>(m, "AUTOMATON")
-    .def(py::init<>())
-    .def_readwrite("automaton", &AUTOMATON::automaton)
-    .def_readwrite("output_links", &AUTOMATON::output_links)   
-    .def("__str__", &AUTOMATON::toString)
-    .def("__len__", &AUTOMATON::size)
-    ;
+    saver.join();
+    result_file.close();
 
-    py::class_<MARKERS_DATA>(m, "MARKERS_DATA")
-    .def(py::init<>())
-    .def_readwrite("sum_of_all_chars", &MARKERS_DATA::sum_of_all_chars, py::return_value_policy::reference)
-    .def_readwrite("longest_marker_len", &MARKERS_DATA::longest_marker_len)
-    .def_readwrite("markers", &MARKERS_DATA::markers)
-    ;
-
-    m.def("create_automaton", &create_automaton , py::return_value_policy::reference);
-
-    m.def("read_markers", &read_markers_wraper, py::return_value_policy::reference);
-
-    m.def("match", &match_dummy, py::return_value_policy::reference);
-
-    // m.def("print_automaton", &print_automaton, py::return_value_policy::reference);
-
-    // m.def("read_create", &read_create);
-
-    // m.def("search", search_markrs);
-
-#ifdef VERSION_INFO
-    m.attr("__version__") = VERSION_INFO;
-#else
-    m.attr("__version__") = "dev";
-#endif
+    return 0;
 }

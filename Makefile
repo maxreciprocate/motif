@@ -1,4 +1,6 @@
-all: bench-100
+all: motif
+motif:
+	pip3 install --user --upgrade ./motif/
 
 bench-%: data-% jam groove
 	julia benchmark.jl $*
@@ -10,9 +12,6 @@ jam:
 groove:
 	$(MAKE) clean -C motif
 	$(MAKE) -C motif
-
-jam_lib: jam_lib/jam_lib.cpp jam_lib/jam/jam_run.cc jam_lib/jam/jam.cu jam_lib/jam/jam.h 
-	pip3 install --user ./jam_lib/ --upgrade
 
 data-%:
 	$(MAKE) $@ -C data

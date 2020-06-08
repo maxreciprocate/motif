@@ -1,13 +1,35 @@
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.17)
+project(motif LANGUAGES CXX CUDA)
 
-project(groove)
+add_subdirectory(pybind11)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_C_COMPILER /usr/bin/gcc-9)
-set(CMAKE_CXX_COMPILER /usr/bin/g++-9)
+set(CUDA_SEPARABLE_COMPILATION ON)
+set(CUDA_PROPAGATE_HOST_FLAGS OFF)
+set(CMAKE_CXX_STANDARD 11)
 
-find_package(Threads REQUIRED)
+find_package(CUDAToolkit)
 
-add_executable(groove main.cpp motif.cpp src/readers/file_readers.cpp src/readers/file_readers.cpp src/queue/ConcurrentQueue.h)
+# pybind11 sets -fvisibility=hidden in INTERFACE_COMPILE_OPTIONS on it's module target
+get_target_property(modifacecopts module INTERFACE_COMPILE_OPTIONS)
+list(REMOVE_ITEM modifacecopts "-fvisibility=hidden")
+set_target_properties(module PROPERTIES INTERFACE_COMPILE_OPTIONS "${modifacecopts}")
 
-target_link_libraries(groove Threads::Threads)
+add_library(motif MODULE
+    main.cc
+    jam/jam.h
+    jam/jam.cu
+    jam/motif.h
+    jam/motif.cc
+    jam/queue.h
+)
+
+set_target_properties(motif PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    CUDA_VISIBILITY_PRESET "hidden"
+    CXX_VISIBILITY_PRESET "hidden"
+    INTERPROCEDURAL_OPTIMIZATION TRUE
+    PREFIX "${PYTHON_MODULE_PREFIX}"
+    SUFFIX "${PYTHON_MODULE_EXTENSION}"
+)
+
+target_link_libraries(motif PRIVATE pybind11::module CUDA::cudart)

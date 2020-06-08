@@ -1,7 +1,6 @@
 import numpy as np
 from PresenceMatrix import PresenceMatrix
-#from Analyzer import Analyzer
-import jam_lib
+import motif
 import time
 
 class ExtractionStage:
@@ -104,7 +103,7 @@ class CandidateMarkerFinder(ExtractionStage):
         self._presence_matrix = PresenceMatrix()
         self._presence_matrix.initialize(genomes, len(markers))
 
-        analyzer = jam_lib.Analyzer()
+        analyzer = motif.Motif()
 
         selected_gpu_devices = [1, 1, 1, 1]
 
@@ -149,4 +148,3 @@ class CandidateMarkerFinder(ExtractionStage):
         analyzer.clear()
 
         self.completed = True
-

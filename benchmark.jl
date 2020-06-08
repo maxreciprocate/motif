@@ -1,9 +1,9 @@
 #!/usr/bin/env julia
 contenders = [
     #("bassline", "bassline/double-build.jl"),
-    ("groove", "motif/build/groove"),
+    # ("groove", "motif/build/groove"),
     ("jam", "jam/jam"),
-    ("jamlib", "python_interface/run.py")
+    ("motif", "python_interface/run.py")
 ]
 
 chmod.(last.(contenders), 0o777)
@@ -54,24 +54,11 @@ end
 
 benchmarks = [
     ["data/1genomes.txt", "data/8000markers.csv"],
-    #["data/10genomes.txt", "data/80000markers.csv"],
-    #["data/100genomes.txt", "data/800000markers.csv"],
-    #["data/1000genomes.txt", "data/3000000markers.csv"],
+    ["data/10genomes.txt", "data/8000markers.csv"],
     ["data/1genomes.txt", "data/markers.csv"],
+    ["data/100genomes.txt", "data/markers.csv"],
+    # ["data/1000genomes.txt", "data/3000000markers.csv"],
 ]
-
-if length(ARGS) > 0
-    try
-        nbenchs = round(Int, log10(parse(Int, ARGS[1]))) + 1
-
-        if nbenchs <= size(benchmarks)[1]
-            global benchmarks = benchmarks[1:nbenchs]
-        end
-    catch
-        println("usage: julia download.jl <number of benches>")
-        exit(1)
-    end
-end
 
 ENV["JULIA_NUM_THREADS"] = ENV["PYPY_NUM_THREADS"] = 4
 ENV["SAVE_RESULT_TO_FILE"] = 1
