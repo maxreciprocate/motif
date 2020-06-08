@@ -20,6 +20,10 @@ add_library(jam_lib MODULE
     jam/jam_run.cc
     jam/jam.h
     jam/jam.cu
+    jam/Analyzer.cpp
+    jam/Analyzer.h
+    jam/Queue.h
+    jam/Queue.cpp
 )
 
 set_target_properties(jam_lib PROPERTIES

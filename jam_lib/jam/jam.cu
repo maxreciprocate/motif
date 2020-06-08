@@ -66,3 +66,8 @@ void match(char* d_source, std::string& source, int8_t* d_output, int8_t* output
 
   noteError(cudaMemcpy(output, d_output, output_size, cudaMemcpyDeviceToHost));
 }
+
+
+void unbindTexture() {
+  noteError(cudaUnbindTexture(t_table));
+} 

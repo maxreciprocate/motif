@@ -20,6 +20,16 @@
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
 
+#define noteError(msg) \
+  { noteErrorM((msg), __FILE__, __LINE__); }
+
+inline void noteErrorM(cudaError_t code, const char* file, int line) {
+  if (code != cudaSuccess) {
+    fprintf(stderr, "(cuda error): %s %s %d\n", cudaGetErrorString(code), file, line);
+  }
+}
+
+
 struct measurer {
   std::string subject;
   std::chrono::high_resolution_clock::time_point start;
@@ -174,10 +184,10 @@ void process (Queue<std::pair<int, std::string>>& sourcequeue,
     pair = sourcequeue.pop();
   }
 
-  cudaFree(d_table);
-  cudaFree(d_lut);
-  cudaFree(d_output);
-  cudaFree(d_source);
+  noteError(cudaFree(d_table));
+  noteError(cudaFree(d_lut));
+  noteError(cudaFree(d_output));
+  noteError(cudaFree(d_source));
 }
 
 void read_genome_from_numpy(pybind11::handle source, std::string& buff) {
@@ -197,6 +207,17 @@ void read_genome_from_numpy(pybind11::handle source, std::string& buff) {
     buff.push_back(ch);
   }
 }
+
+
+
+
+
+
+
+
+
+
+
 
 void run(const pybind11::list genome_data, uint64_t max_genome_length,
          const pybind11::list markers_data, pybind11::array_t<int8_t> output_matrix,

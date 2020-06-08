@@ -1,7 +1,8 @@
 import numpy as np
 from PresenceMatrix import PresenceMatrix
-from Analyzer import Analyzer
-
+#from Analyzer import Analyzer
+import jam_lib
+import time
 
 class ExtractionStage:
     def __init__(self, name):
@@ -103,10 +104,20 @@ class CandidateMarkerFinder(ExtractionStage):
         self._presence_matrix = PresenceMatrix()
         self._presence_matrix.initialize(genomes, len(markers))
 
+        analyzer = jam_lib.Analyzer()
+
+        selected_gpu_devices = [1, 1, 1, 1]
+
+        analyzer.build(
+          markers,
+          selected_gpu_devices
+        )
+
         while counter < len(genomes):
             # fill block with data
             block_counter = 0
             max_genome_length = 0
+            read_start = time.time()
             while block_counter < block_size and counter < len(genomes):
                 block_genomes[block_counter] = genomes[counter].get_genome_string_data()
                 max_genome_length = max(max_genome_length, len(block_genomes[block_counter]))
@@ -117,16 +128,25 @@ class CandidateMarkerFinder(ExtractionStage):
             if block_counter < block_size - 1:
                 block_genomes = block_genomes[:block_counter]
 
-            matrix_result = Analyzer().run(
-                block_genomes,
-                max_genome_length,
-                markers,
-                [1,1,1,1],
-                False
+            read_end = time.time()
+
+            matrix_result = np.zeros((len(block_genomes), len(markers)), dtype=np.int8)
+
+            isGenomeInNumpyForm = False
+
+            analyzer.run(
+              block_genomes,
+              max_genome_length,
+              matrix_result,
+              isGenomeInNumpyForm
             )
 
             for i, genome_result in enumerate(matrix_result):
                 self._presence_matrix.add_all_positions_for_genome(genomes[counter - block_counter + i], genome_result)
+
+            print("Reading block time: {}, analyzing + saving: {}".format(read_end - read_start, time.time() - read_end))
+
+        analyzer.clear()
 
         self.completed = True
 

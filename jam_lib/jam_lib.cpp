@@ -2,6 +2,9 @@
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
 #include <stdlib.h>
+#include "jam/jam.h"
+#include "jam/Analyzer.h"
+#include <stdio.h>
 
 void run(
   const pybind11::list genome_data,
@@ -13,7 +16,13 @@ void run(
 );
 
 PYBIND11_MODULE(jam_lib, m) {
-  m.def("run", &run);
+  //m.def("run", &run);
+
+  pybind11::class_<Analyzer>(m, "Analyzer")
+    .def(pybind11::init<>())
+    .def("build", &Analyzer::build)
+    .def("run", &Analyzer::run)
+    .def("clear", &Analyzer::clear);
 
 #ifdef VERSION_INFO
     m.attr("__version__") = VERSION_INFO;

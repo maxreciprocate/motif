@@ -1,0 +1,245 @@
+#include "Analyzer.h"
+
+#define MAX_SOURCE_QUEUE_SIZE    64
+
+#define noteError(msg) \
+  { noteErrorM((msg), __FILE__, __LINE__); }
+
+inline void noteErrorM(cudaError_t code, const char* file, int line) {
+  if (code != cudaSuccess) {
+    fprintf(stderr, "(cuda error): %s %s %d\n", cudaGetErrorString(code), file, line);
+  }
+}
+
+
+// Creation of persistent table
+void Analyzer::build(
+  const pybind11::list markers_data,
+  const pybind11::array_t<int> gpu_devices
+) {
+  std::vector<std::string> markers;
+  markers.reserve(markers_data.size());
+
+  uint64_t nchars = 0;
+
+  for (ssize_t i = 0; i < markers_data.size(); ++i) {
+    auto data = PyUnicode_AsUTF8(markers_data[i].ptr());
+
+    if (!data) {
+      std::cerr << "failed marker" << std::endl;
+    }
+
+    markers.emplace_back(data);
+
+    nchars += strlen(data);
+  }
+
+  size_t tablesize = 5 * std::ceil(
+      nchars -
+      1 / 2 * markers.size() * std::log2(markers.size() / std::sqrt(4)) + 24);
+
+  std::vector<uint32_t> table(tablesize, 0);
+
+  uint32_t edge = 0;
+  uint32_t wordidx = 0;
+
+  //std::unordered_map<uint32_t, std::vector<uint32_t>> duplicates;
+  //std::unordered_map<std::string, uint32_t> marked_mapping;
+
+  auto& duplicates = this->duplicates;
+  auto& marked_mapping = this->marked_mapping;
+
+  for (const auto& marker: markers) {
+    uint32_t vx = 0;
+
+    for (auto &base : marker) {
+      uint32_t idx = 5 * vx + Lut[base - 0x40] - 1;
+
+      if (table[idx] == 0)
+        table[idx] = ++edge;
+
+      vx = table[idx];
+    }
+
+    auto search = marked_mapping.find(marker);
+
+    ++wordidx;
+
+    if (search == marked_mapping.end()) {
+      table[5 * vx + 4] = wordidx;
+      marked_mapping[marker] = wordidx;
+
+      duplicates[wordidx] = {};
+    } else {
+      duplicates[search->second].push_back(wordidx);
+    }
+  }
+
+
+  int devicecount = 0;
+
+  cudaError_t error = cudaGetDeviceCount(&devicecount);
+  if (error != cudaSuccess) {
+    printf("(cuda): can't get a grip upon devices with %s\n", cudaGetErrorString(error));
+    exit(1);
+  }
+
+  auto devices = gpu_devices.data();
+
+  this->gpu_selected.assign(gpu_devices.data(), gpu_devices.data() + gpu_devices.shape(0));
+  this->table_pointers.reserve(gpu_devices.shape(0));
+
+  for (size_t deviceidx = 0; deviceidx < devicecount; ++deviceidx) {
+    if (devices[deviceidx]) {
+       auto& d_table = this->table_pointers[deviceidx];
+
+       if (debug)
+         printf("setting up %zu device\n", deviceidx);
+
+       auto error = cudaSetDevice(deviceidx);
+
+       if (error != cudaSuccess) {
+         printf("(cuda): can't select device #%ld with %s\n", deviceidx, cudaGetErrorString(error));
+         return;
+       }
+
+       setup(d_table, table);
+       this->gpu_counter++;
+    }
+  }
+}
+
+
+void Analyzer::process(
+  Queue<std::pair<int, std::string>>& sourcequeue,
+  uint64_t max_genome_length,
+  pybind11::array_t<int8_t> output_matrix,
+  size_t deviceidx
+) {
+  if (debug)
+    printf("setting up %ld device\n", deviceidx);
+
+  auto error = cudaSetDevice(deviceidx);
+
+  if (error != cudaSuccess) {
+    printf("(cuda): can't select device #%ld with %s\n", deviceidx, cudaGetErrorString(error));
+    return;
+  }
+
+  char *d_source;
+  int8_t *d_output;
+
+  cudaMalloc((void **)& d_source, max_genome_length);
+  cudaMalloc((void **)& d_output, output_matrix.shape(1));
+
+  auto pair = sourcequeue.pop();
+  while (pair.second.size() > 0) {
+    auto source = pair.second;
+    auto source_idx = pair.first;
+    auto output_row = output_matrix.mutable_data(source_idx);
+
+    match(d_source, source, d_output, output_row, output_matrix.shape(1));
+
+    for (const auto &pair : this->duplicates) {
+      if (output_row[pair.first - 1] == 1) {
+        for (const auto &idx : pair.second)
+          output_row[idx - 1] = 1;
+      }
+    }
+
+    pair = sourcequeue.pop();
+  }
+
+  cudaFree(d_output);
+  cudaFree(d_source);
+}
+
+std::string Analyzer::read_genome_from_numpy(
+  pybind11::handle source
+) {
+  const char chars[4] = {'A', 'T', 'C', 'G'};
+  auto data = pybind11::array_t<int8_t, pybind11::array::c_style | pybind11::array::forcecast>::ensure(source);
+
+  std::string buff;
+
+  buff.reserve(data.shape(1));
+
+  for (size_t col = 0; col < data.shape(1); ++col) {
+
+    char ch = 'N';
+    for (size_t row = 0; row < data.shape(0); ++row) {
+      if (*data.data(row, col) == 1) {
+        ch = chars[row];
+        break;
+      }
+    }
+    buff.push_back(ch);
+  }
+  return buff;
+}
+
+
+
+void Analyzer::run(
+  const pybind11::list genome_data,
+  uint64_t max_genome_length,
+  pybind11::array_t<int8_t> output_matrix,
+  bool is_numpy
+) {
+
+  Queue<std::pair<int, std::string>> sourcequeue (MAX_SOURCE_QUEUE_SIZE);
+
+  std::thread reader {[&]() {
+    for (size_t i = 0; i < genome_data.size(); ++i) {
+      std::string buff;
+
+      if (is_numpy)
+        buff = read_genome_from_numpy(genome_data[i]);
+      else
+        buff = PyUnicode_AsUTF8(genome_data[i].ptr());
+
+      sourcequeue.push(std::make_pair(i, buff));
+    }
+
+    sourcequeue.finish();
+  }};
+
+
+  std::vector<std::thread> workers;
+  workers.reserve(this->gpu_counter);
+
+  for (size_t idx = 0; idx < this->gpu_counter; ++idx) {
+    if (this->gpu_selected[idx]) {
+      workers.emplace_back(
+        &Analyzer::process, this, std::ref(sourcequeue), max_genome_length, output_matrix, idx
+      );
+    }
+  }
+
+  for (auto& t: workers)
+    t.join();
+
+  reader.join();
+}
+
+
+void Analyzer::clear() {
+  for (size_t deviceidx = 0; deviceidx < this->gpu_selected.size(); ++deviceidx) {
+    if (this->gpu_selected[deviceidx]) {
+
+      if (debug)
+        printf("setting up %ld device\n", deviceidx);
+
+      auto error = cudaSetDevice(deviceidx);
+
+      if (error != cudaSuccess) {
+        printf("(cuda): can't select device #%ld with %s\n", deviceidx, cudaGetErrorString(error));
+        return;
+      }
+
+      noteError(cudaDeviceReset());
+      //noteError(cudaFree(*this->table_pointers[deviceidx]));
+    }
+  }
+};
+
