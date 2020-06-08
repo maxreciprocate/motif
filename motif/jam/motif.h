@@ -21,6 +21,7 @@ private:
   std::vector<bool> gpu_selected;
   size_t gpu_counter;
   bool cleared;
+  bool built;
 
 public:
   Motif() = default;

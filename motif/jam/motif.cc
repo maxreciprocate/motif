@@ -2,6 +2,10 @@
 #include "queue.h"
 
 void Motif::build(const pybind11::list markers_data, const pybind11::array_t<int> gpu_devices) {
+  if (markers_data.size() == 0) {
+    std::cerr << "Empty list of markers" << std::endl;
+    return;
+  }
   std::vector<std::string> markers;
   markers.reserve(markers_data.size());
 
@@ -88,6 +92,7 @@ void Motif::build(const pybind11::list markers_data, const pybind11::array_t<int
        this->gpu_counter++;
     }
   }
+  built = true;
 }
 
 void Motif::process(Queue<std::pair<int, std::string>>& sourcequeue, uint64_t max_genome_length,
@@ -133,7 +138,10 @@ void Motif::process(Queue<std::pair<int, std::string>>& sourcequeue, uint64_t ma
 std::string Motif::read_genome_from_numpy(pybind11::handle source) {
   const char chars[4] = {'A', 'T', 'C', 'G'};
   auto data = pybind11::array_t<int8_t, pybind11::array::c_style | pybind11::array::forcecast>::ensure(source);
-
+  if (data.shape(1) < 1) {
+    std::cerr << "Empty Genome" << std::endl;
+    return "";
+  }
   std::string buff;
 
   buff.reserve(data.shape(1));
@@ -156,6 +164,11 @@ std::string Motif::read_genome_from_numpy(pybind11::handle source) {
 
 void Motif::run(const pybind11::list genome_data, uint64_t max_genome_length,
                 pybind11::array_t<int8_t> output_matrix, bool is_numpy) {
+  
+  if (!this->built) {
+    std::cerr << "call Motif.build() befor calling run" << std::endl;
+    return;
+  }
 
   Queue<std::pair<int, std::string>> sourcequeue (MAX_SOURCE_QUEUE_SIZE);
 
@@ -167,6 +180,10 @@ void Motif::run(const pybind11::list genome_data, uint64_t max_genome_length,
         buff = read_genome_from_numpy(genome_data[i]);
       else
         buff = PyUnicode_AsUTF8(genome_data[i].ptr());
+        if (buff.size() == 0) {
+          std::cerr << "Bad Genome" << std::endl;
+          return;
+        }
 
       sourcequeue.push(std::make_pair(i, buff));
     }
