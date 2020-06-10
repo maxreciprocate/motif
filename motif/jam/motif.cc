@@ -136,7 +136,7 @@ void Motif::process(Queue<std::pair<int, std::string>>& sourcequeue, uint64_t ma
 }
 
 std::string Motif::read_genome_from_numpy(pybind11::handle source) {
-  const char chars[4] = {'A', 'T', 'C', 'G'};
+  const char chars[4] = {'A', 'C', 'G', 'T'};
   auto data = pybind11::array_t<int8_t, pybind11::array::c_style | pybind11::array::forcecast>::ensure(source);
   if (data.shape(1) < 1) {
     std::cerr << "Empty Genome" << std::endl;
@@ -164,7 +164,7 @@ std::string Motif::read_genome_from_numpy(pybind11::handle source) {
 
 void Motif::run(const pybind11::list genome_data, uint64_t max_genome_length,
                 pybind11::array_t<int8_t> output_matrix, bool is_numpy) {
-  
+
   if (!this->built) {
     std::cerr << "call Motif.build() befor calling run" << std::endl;
     return;
