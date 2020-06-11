@@ -46,6 +46,10 @@ public:
     size_t deviceidx
   );
 
+  std::string read_genome_from_string(
+    pybind11::handle source
+  );
+
   std::string read_genome_from_numpy(
     pybind11::handle source
   );
