@@ -13,6 +13,7 @@
 #include "jam.h"
 #include "queue.h"
 
+
 class Motif {
 private:
   std::unordered_map<uint32_t, std::vector<uint32_t>> duplicates;
@@ -40,13 +41,13 @@ public:
   );
 
   void process(
-    Queue<std::pair<int, std::string>>& sourcequeue,
+    Queue<std::pair<size_t, encodedGenomeData>>& sourcequeue,
     uint64_t max_genome_length,
     pybind11::array_t<int8_t> output_matrix,
     size_t deviceidx
   );
 
-  std::string read_genome_from_string(
+  encodedGenomeData read_genome_from_string(
     pybind11::handle source
   );
 

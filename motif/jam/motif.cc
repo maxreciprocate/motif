@@ -95,7 +95,7 @@ void Motif::build(const pybind11::list markers_data, const pybind11::array_t<int
   built = true;
 }
 
-void Motif::process(Queue<std::pair<int, std::string>>& sourcequeue, uint64_t max_genome_length,
+void Motif::process(Queue<std::pair<size_t, encodedGenomeData>>& sourcequeue, uint64_t max_genome_length,
                     pybind11::array_t<int8_t> output_matrix, size_t deviceidx) {
   if (debug)
     printf("setting up %zu device\n", deviceidx);
@@ -114,7 +114,7 @@ void Motif::process(Queue<std::pair<int, std::string>>& sourcequeue, uint64_t ma
   noteError(cudaMalloc((void **)& d_output, output_matrix.shape(1)));
 
   auto pair = sourcequeue.pop();
-  while (pair.second.size() > 0) {
+  while (pair.second.data.size() > 0) {
     auto source = pair.second;
     auto source_idx = pair.first;
     auto output_row = output_matrix.mutable_data(source_idx);
@@ -135,23 +135,102 @@ void Motif::process(Queue<std::pair<int, std::string>>& sourcequeue, uint64_t ma
   noteError(cudaFree(d_source));
 }
 
-std::string Motif::read_genome_from_string(pybind11::handle source) {
-  std::string genome = PyUnicode_AsUTF8(source.ptr());
+void skipN(const std::string& genome, size_t& pos) {
+  if (genome[pos] != 'N') return;
 
-  size_t j = 0;
-
-  for (int i = 0; i < genome.size() - 1; ++i) {
-    auto ch = genome[i];
-
-    if (ch == 'N' && genome[i + 1] == 'N') continue;
-
-    genome[j++] = ch;
+  for (pos++; pos < genome.size(); ++pos) {
+    if (genome[pos] != 'N') {
+        --pos;
+        return;
+    }
   }
 
-  genome[j++] = genome[genome.size() - 1];
+  --pos;
+}
 
-  genome.resize(j);
-  return genome;
+void encode_3_chars(const std::string& chars, char& container, const std::array<uint8_t, 'T' - 'A' + 1>& translate) {
+  uint8_t countN = std::count(chars.begin(), chars.end(), 'N');
+
+  char encoded_char = 0;
+  // data (chars) will be saved in "reverse" mode for easier future access by shifts and bitwise
+  if (countN == 0) {
+    // encode all 3 chars by 2 bits
+    for (int8_t i = 2; i >= 0; --i) {
+        encoded_char |= translate[chars[i] - 'A'];
+        encoded_char <<= 2;
+    }
+  } else if (countN == 1) {
+    // in this case we also need to save index of N
+    uint8_t index = chars.find("N");
+
+    // encode 2 "not N" chars
+    for (int8_t i = 2; i >= 0; --i) {
+        if (i == index) continue;
+        encoded_char |= translate[chars[i] - 'A'];
+        encoded_char <<= 2;
+    }
+    encoded_char |= index;
+    encoded_char <<= 2;
+  } else if (countN == 2) {
+    // in these case ("N_N", since we replace "NN" by "N") encode only middle char
+    encoded_char |= translate[chars[1] - 'A'];
+    encoded_char <<= 2;
+  } else { // countN == 3
+    // will be created in future version of the algorithm, when we will analyze 'N'
+  }
+
+  // save amount of 'N' in encoded char
+  encoded_char |= countN;
+
+  container = encoded_char;
+}
+
+
+encodedGenomeData Motif::read_genome_from_string(pybind11::handle source) {
+  encodedGenomeData data = {
+    .data = PyUnicode_AsUTF8(source.ptr()),
+    .real_size = 0
+  };
+  auto& genome = data.data;
+
+  std::array<uint8_t, 'T' - 'A' + 1> translate{};
+
+  translate['C' - 'A'] = 1;
+  translate['G' - 'A'] = 2;
+  translate['T' - 'A'] = 3;
+  translate['N' - 'A'] = 4;
+
+  size_t i = 0;
+  size_t cursor = 0;
+
+  std::string substr;
+  substr.reserve(3);
+
+  while (i < genome.size()) {
+    substr.clear();
+
+    for (uint8_t c = 0; c < 3 && i < genome.size(); ++c, ++i) {
+        skipN(genome, i);
+        substr.push_back(genome[i]);
+    }
+
+    if (substr.size() != 3) {
+      // if genome size not divisible by 3 than just add 'A' (zeros in encoded format) to the end
+      data.real_size = (cursor * 3) + substr.size();
+      for (uint8_t j = 0; j < (3 - substr.size()); ++j) {
+        substr.push_back('A');
+      }
+    } else {
+      data.real_size = (cursor + 1) * 3;
+    }
+
+    encode_3_chars(substr, genome[cursor++], translate);
+  }
+
+
+  genome.resize(cursor);
+
+  return data;
 }
 
 
@@ -190,20 +269,21 @@ void Motif::run(const pybind11::list genome_data, uint64_t max_genome_length,
     return;
   }
 
-  Queue<std::pair<int, std::string>> sourcequeue (MAX_SOURCE_QUEUE_SIZE);
+  Queue<std::pair<size_t, encodedGenomeData>> sourcequeue (MAX_SOURCE_QUEUE_SIZE);
 
   std::thread reader {[&]() {
     for (size_t i = 0; i < genome_data.size(); ++i) {
-      std::string buff;
+      encodedGenomeData buff;
 
-      if (is_numpy)
-        buff = read_genome_from_numpy(genome_data[i]);
-      else
+      if (is_numpy) {
+
+        //buff = read_genome_from_numpy(genome_data[i]);
+      } else
         buff = read_genome_from_string(genome_data[i]);
-        if (buff.size() == 0) {
-          std::cerr << "Bad Genome" << std::endl;
-          return;
-        }
+        //if (buff.size() == 0) {
+        //  std::cerr << "Bad Genome" << std::endl;
+        //  return;
+        //}
 
       sourcequeue.push(std::make_pair(i, buff));
     }
