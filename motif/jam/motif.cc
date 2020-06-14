@@ -5,18 +5,6 @@ std::array<uint8_t, 'T' - 'A' + 1> translate{{
   0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 3
 }};
 
-inline std::chrono::high_resolution_clock::time_point get_current_time_fenced() {
-    std::atomic_thread_fence(std::memory_order_seq_cst);
-    auto res_time = std::chrono::high_resolution_clock::now();
-    std::atomic_thread_fence(std::memory_order_seq_cst);
-    return res_time;
-}
-
-template<class D>
-inline double to_us(const D& d) {
-    return std::chrono::duration_cast<std::chrono::microseconds>(d).count();
-}
-
 void Motif::build(const pybind11::list markers_data, const pybind11::array_t<int> gpu_devices) {
   if (markers_data.size() == 0) {
     std::cerr << "Empty list of markers" << std::endl;
@@ -219,7 +207,6 @@ encodedGenomeData Motif::read_genome_from_string(pybind11::handle source) {
     .real_size = 0
   };
 
-  auto begin = get_current_time_fenced();
   auto& genome = data.data;
   genome.reserve(d_source.size());
 
@@ -253,10 +240,6 @@ encodedGenomeData Motif::read_genome_from_string(pybind11::handle source) {
 
 
   genome.shrink_to_fit();
-
-  auto end = get_current_time_fenced();
-
-  std::cout << "Encoding time: " << to_us(end - begin) << "[ns]" << std::endl;
 
   return data;
 }
@@ -299,25 +282,29 @@ void Motif::run(const pybind11::list genome_data, uint64_t max_genome_length,
 
   Queue<std::pair<size_t, encodedGenomeData>> sourcequeue (MAX_SOURCE_QUEUE_SIZE);
 
-  std::thread reader {[&]() {
-    for (size_t i = 0; i < genome_data.size(); ++i) {
-      encodedGenomeData buff;
+  std::vector<std::thread> readers;
+  const uint8_t reader_num = 16;
+  readers.reserve(reader_num);
 
-      if (is_numpy) {
+  for (uint8_t tidx = 0; tidx < reader_num; ++tidx) {
+    readers.emplace_back([&, tidx]{
+      printf("tidx: %d\n", tidx);
+      for (size_t i = tidx; i < genome_data.size(); i += reader_num) {
+        encodedGenomeData buff;
 
-        //buff = read_genome_from_numpy(genome_data[i]);
-      } else
-        buff = read_genome_from_string(genome_data[i]);
-        //if (buff.size() == 0) {
-        //  std::cerr << "Bad Genome" << std::endl;
-        //  return;
-        //}
+        if (is_numpy) {
+          //buff = read_genome_from_numpy(genome_data[i]);
+        } else
+          buff = read_genome_from_string(genome_data[i]);
+          //if (buff.size() == 0) {
+          //  std::cerr << "Bad Genome" << std::endl;
+          //  return;
+          //}
 
-      sourcequeue.push(std::make_pair(i, buff));
-    }
-
-    sourcequeue.finish();
-  }};
+        sourcequeue.push(std::make_pair(i, buff));
+      }
+    });
+  }
 
   std::vector<std::thread> workers;
   workers.reserve(this->gpu_counter);
@@ -330,10 +317,12 @@ void Motif::run(const pybind11::list genome_data, uint64_t max_genome_length,
     }
   }
 
+  for (auto& t: readers)
+    t.join();
+  sourcequeue.finish();
+
   for (auto& t: workers)
     t.join();
-
-  reader.join();
 }
 
 void Motif::clear() {

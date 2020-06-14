@@ -12,18 +12,6 @@ texture<uint8_t, cudaTextureType1D> t_translation;
 cudaChannelFormatDesc uint8Desc = cudaCreateChannelDesc<uint8_t>();
 cudaChannelFormatDesc uint32Desc = cudaCreateChannelDesc<uint32_t>();
 
-inline std::chrono::high_resolution_clock::time_point get_current_time_fenced() {
-    std::atomic_thread_fence(std::memory_order_seq_cst);
-    auto res_time = std::chrono::high_resolution_clock::now();
-    std::atomic_thread_fence(std::memory_order_seq_cst);
-    return res_time;
-}
-
-template<class D>
-inline double to_us(const D& d) {
-    return std::chrono::duration_cast<std::chrono::microseconds>(d).count();
-}
-
 #define N_CODE    5
 
 __device__ void decode_3_char(char encoded_char, volatile uint8_t* data) {
@@ -65,27 +53,11 @@ __device__ void decode_3_char(char encoded_char, volatile uint8_t* data) {
   
 }
 
-__device__ void p_c(char a) {
-    for (int i = 0; i < 8; i++) {
-      printf("%d", !!((a << i) & 0x80));
-    }
-    printf("\n");
-}
-
-
-__host__ void p_c_h(char a) {
-    for (int i = 0; i < 8; i++) {
-      printf("%d", !!((a << i) & 0x80)); 
-    }
-    printf("\n");
-}
-
 #define NUM_CHARS_IN_BYTE  3
 #define BLOCK_DIM          1024
 
 __global__ void launch(char* d_source, uint32_t size, int8_t* d_output) {
-  extern __shared__ uint8_t s_source[BLOCK_DIM * NUM_CHARS_IN_BYTE];
-  //__shared__ uint8_t s_source[1740];
+  __shared__ uint8_t s_source[BLOCK_DIM * NUM_CHARS_IN_BYTE];
 
   uint32_t stride = gridDim.x * blockDim.x;
 
@@ -133,36 +105,18 @@ void setup(uint32_t*& d_table, std::vector<uint32_t>& table) {
   noteError(cudaMalloc((void**)&d_table, table.size() * sizeof(uint32_t)));
   noteError(cudaMemcpy(d_table, table.data(), table.size() * sizeof(uint32_t), cudaMemcpyHostToDevice));
 
-  //for (int row = 0; row < (table.size() / 5); ++row) {
-  //  for (int col = 0; col < 5; ++col) {
-  //    printf("%d ", table[row * 5 + col]);
-  //  }
-  //  printf("\n");
-  //}
-
-
   noteError(cudaBindTexture(0, t_table, d_table, uint32Desc, table.size() * sizeof(uint32_t)));
 }
 
 void match(char* d_source, encodedGenomeData& source, int8_t* d_output, int8_t* output, int64_t output_size) {
-  //dim3 dimGrid(1);
-  //dim3 dimBlock(source.data.size());
   dim3 dimGrid(std::max(source.data.size() >> 11, static_cast<size_t>(32768)));
   dim3 dimBlock(1024);
 
-
-  std::cout << source.data.size() << std::endl;
-  //p_c_h(source.data[0]);
-  //std::cout << source.real_size << std::endl;
   noteError(cudaMemcpy(d_source, source.data.data(), source.data.size(), cudaMemcpyHostToDevice));
   noteError(cudaMemcpy(d_output, output, output_size, cudaMemcpyHostToDevice));
 
-  auto begin = get_current_time_fenced();
   launch<<<dimGrid, dimBlock>>>(d_source, source.real_size, d_output);
-  auto end = get_current_time_fenced();
 
-  std::cout << "Kernel time: " << to_us(end - begin) << "[us]" << std::endl;
-  //printf("output_size: %d\n", output_size);
   noteError(cudaMemcpy(output, d_output, output_size, cudaMemcpyDeviceToHost));
 }
 
