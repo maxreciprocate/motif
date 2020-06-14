@@ -2,6 +2,8 @@
 
 #include <string>
 #include <vector>
+#include <chrono>
+#include <atomic>
 
 #include "jam.h"
 
@@ -10,9 +12,21 @@ texture<uint8_t, cudaTextureType1D> t_translation;
 cudaChannelFormatDesc uint8Desc = cudaCreateChannelDesc<uint8_t>();
 cudaChannelFormatDesc uint32Desc = cudaCreateChannelDesc<uint32_t>();
 
+inline std::chrono::high_resolution_clock::time_point get_current_time_fenced() {
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+    auto res_time = std::chrono::high_resolution_clock::now();
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+    return res_time;
+}
+
+template<class D>
+inline double to_us(const D& d) {
+    return std::chrono::duration_cast<std::chrono::microseconds>(d).count();
+}
+
 #define N_CODE    5
 
-__device__ void decode_3_char(char encoded_char, uint8_t data[3]) {
+__device__ void decode_3_char(char encoded_char, volatile uint8_t* data) {
   
   uint8_t countN = encoded_char & 0b11;
     
@@ -47,6 +61,8 @@ __device__ void decode_3_char(char encoded_char, uint8_t data[3]) {
   } else { // countN == 3
     // will be created in future version of the algorithm, when we will analyze 'N'
   }
+
+  
 }
 
 __device__ void p_c(char a) {
@@ -64,82 +80,46 @@ __host__ void p_c_h(char a) {
     printf("\n");
 }
 
+#define NUM_CHARS_IN_BYTE  3
+#define BLOCK_DIM          1024
+
 __global__ void launch(char* d_source, uint32_t size, int8_t* d_output) {
+  extern __shared__ uint8_t s_source[BLOCK_DIM * NUM_CHARS_IN_BYTE];
+  //__shared__ uint8_t s_source[1740];
+
   uint32_t stride = gridDim.x * blockDim.x;
 
-  uint8_t data[3];
-
-  for (uint32_t tidx = blockIdx.x * blockDim.x + threadIdx.x; tidx < size; tidx += stride) {
+  for (size_t tidx = blockIdx.x * blockDim.x + threadIdx.x; tidx < size; tidx += stride) {
+    uint32_t bidx = tidx - threadIdx.x;
     uint32_t vx = 0;
 
-    
-    for (uint32_t idx = tidx; idx < size; ++idx) {
-      char encoded_char = d_source[idx / 3];
-      // p_c(encoded_char);
-      decode_3_char(encoded_char, data);
+    //if (threadIdx.x < 580) {
+      decode_3_char(
+        d_source[(bidx / 3) + threadIdx.x],
+        &s_source[threadIdx.x * 3]
+      );
+    //}
 
-      //printf("data: %d, %d, %d\n", data[0], data[1], data[2]);
-      
-      uint8_t data_index = idx % 3;
+    __syncthreads();
 
-      //printf("tidx: %d idx: %d data_index: %d\n", tidx, idx, data_index);      
-        uint8_t offset = data[data_index];
+    uint16_t s_source_index = threadIdx.x + (bidx % 3);
+    for (uint32_t global_index = tidx; global_index < size; ++global_index) {
 
-        if (offset == N_CODE) break;
+      uint8_t offset = s_source[s_source_index++];
 
-        vx = tex1Dfetch(t_table, vx * 5 + offset);
+      if (offset == N_CODE) break;
 
-        //printf("tidx: %d vx: %d\n", tidx, vx);
-        if (vx == 0) break;
+      vx = tex1Dfetch(t_table, vx * 5 + offset);
 
-        uint32_t wordidx = tex1Dfetch(t_table, vx * 5 + 4);
+      if (vx == 0) break;
 
-        //printf("tidx: %d wordidx: %d\n", tidx, wordidx);
-        
-        if (wordidx != 0) d_output[wordidx - 1] = 1;
-      
-      if (data_index == 2) continue;
-      if (++idx == size) break;
+      uint32_t wordidx = tex1Dfetch(t_table, vx * 5 + 4);
 
-        offset = data[data_index + 1];
+      if (wordidx != 0) d_output[wordidx - 1] = 1;
 
-        if (offset == N_CODE) break;
-
-        vx = tex1Dfetch(t_table, vx * 5 + offset);
-
-        //printf("tidx: %d vx: %d\n", tidx, vx);
-        if (vx == 0) break;
-
-        wordidx = tex1Dfetch(t_table, vx * 5 + 4);
-
-        //printf("wordidx: %d\n", wordidx);
-
-        if (wordidx != 0) d_output[wordidx - 1] = 1;
-      
-
-      //printf("tidx: %d data_index: %d before break\n", tidx, data_index);
-
-      if (data_index == 1) continue;
-      if (++idx == size) break;
-
-      //printf("tidx: %d data_index: %d after break\n", tidx, data_index);
-
-        offset = data[data_index + 2];
-
-        if (offset == N_CODE) break;
-
-        vx = tex1Dfetch(t_table, vx * 5 + offset);
-
-        //printf("tidx: %d vx: %d\n", tidx, vx);
-        if (vx == 0) break;
-
-        wordidx = tex1Dfetch(t_table, vx * 5 + 4);
-
-        //printf("wordidx: %d\n", wordidx);
-
-        if (wordidx != 0) d_output[wordidx - 1] = 1;
-      
     }
+  
+    __syncthreads();
   }
 }
 
@@ -171,14 +151,18 @@ void match(char* d_source, encodedGenomeData& source, int8_t* d_output, int8_t* 
   dim3 dimBlock(1024);
 
 
-  //std::cout << source.data.size() << std::endl;
+  std::cout << source.data.size() << std::endl;
   //p_c_h(source.data[0]);
   //std::cout << source.real_size << std::endl;
   noteError(cudaMemcpy(d_source, source.data.data(), source.data.size(), cudaMemcpyHostToDevice));
   noteError(cudaMemcpy(d_output, output, output_size, cudaMemcpyHostToDevice));
 
+  auto begin = get_current_time_fenced();
   launch<<<dimGrid, dimBlock>>>(d_source, source.real_size, d_output);
+  auto end = get_current_time_fenced();
 
+  std::cout << "Kernel time: " << to_us(end - begin) << "[us]" << std::endl;
+  //printf("output_size: %d\n", output_size);
   noteError(cudaMemcpy(output, d_output, output_size, cudaMemcpyDeviceToHost));
 }
 
