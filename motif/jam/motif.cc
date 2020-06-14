@@ -1,6 +1,22 @@
 #include "motif.h"
 #include "queue.h"
 
+std::array<uint8_t, 'T' - 'A' + 1> translate{{
+  0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 3
+}};
+
+inline std::chrono::high_resolution_clock::time_point get_current_time_fenced() {
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+    auto res_time = std::chrono::high_resolution_clock::now();
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+    return res_time;
+}
+
+template<class D>
+inline double to_us(const D& d) {
+    return std::chrono::duration_cast<std::chrono::microseconds>(d).count();
+}
+
 void Motif::build(const pybind11::list markers_data, const pybind11::array_t<int> gpu_devices) {
   if (markers_data.size() == 0) {
     std::cerr << "Empty list of markers" << std::endl;
@@ -110,7 +126,7 @@ void Motif::process(Queue<std::pair<size_t, encodedGenomeData>>& sourcequeue, ui
   char* d_source;
   int8_t* d_output;
 
-  noteError(cudaMalloc((void **)& d_source, max_genome_length));
+  noteError(cudaMalloc((void **)& d_source, max_genome_length + 32 * 8));
   noteError(cudaMalloc((void **)& d_output, output_matrix.shape(1)));
 
   auto pair = sourcequeue.pop();
@@ -148,20 +164,29 @@ void skipN(const std::string& genome, size_t& pos) {
   --pos;
 }
 
-void encode_3_chars(const std::string& chars, char& container, const std::array<uint8_t, 'T' - 'A' + 1>& translate) {
-  uint8_t countN = std::count(chars.begin(), chars.end(), 'N');
+char encode_3_chars(const std::string& chars) {
+  uint8_t countN = 0;
+  if (chars[0] == 'N') countN++;
+  if (chars[1] == 'N') countN++;
+  if (chars[2] == 'N') countN++;
 
   char encoded_char = 0;
   // data (chars) will be saved in "reverse" mode for easier future access by shifts and bitwise
   if (countN == 0) {
     // encode all 3 chars by 2 bits
-    for (int8_t i = 2; i >= 0; --i) {
-        encoded_char |= translate[chars[i] - 'A'];
-        encoded_char <<= 2;
-    }
+    encoded_char |= translate[chars[2] - 'A'];
+    encoded_char <<= 2;
+
+    encoded_char |= translate[chars[1] - 'A'];
+    encoded_char <<= 2;
+
+    encoded_char |= translate[chars[0] - 'A'];
+    encoded_char <<= 2;
   } else if (countN == 1) {
     // in this case we also need to save index of N
-    uint8_t index = chars.find("N");
+    uint8_t index = 0;
+    if (chars[1] == 'N') index = 1;
+    if (chars[2] == 'N') index = 2;
 
     // encode 2 "not N" chars
     for (int8_t i = 2; i >= 0; --i) {
@@ -182,23 +207,21 @@ void encode_3_chars(const std::string& chars, char& container, const std::array<
   // save amount of 'N' in encoded char
   encoded_char |= countN;
 
-  container = encoded_char;
+  return encoded_char;
 }
 
 
 encodedGenomeData Motif::read_genome_from_string(pybind11::handle source) {
+  std::string d_source = PyUnicode_AsUTF8(source.ptr());
+
   encodedGenomeData data = {
-    .data = PyUnicode_AsUTF8(source.ptr()),
+    .data = std::string{},
     .real_size = 0
   };
+
+  auto begin = get_current_time_fenced();
   auto& genome = data.data;
-
-  std::array<uint8_t, 'T' - 'A' + 1> translate{};
-
-  translate['C' - 'A'] = 1;
-  translate['G' - 'A'] = 2;
-  translate['T' - 'A'] = 3;
-  translate['N' - 'A'] = 4;
+  genome.reserve(d_source.size());
 
   size_t i = 0;
   size_t cursor = 0;
@@ -206,29 +229,34 @@ encodedGenomeData Motif::read_genome_from_string(pybind11::handle source) {
   std::string substr;
   substr.reserve(3);
 
-  while (i < genome.size()) {
+  while (i < d_source.size()) {
     substr.clear();
 
-    for (uint8_t c = 0; c < 3 && i < genome.size(); ++c, ++i) {
-        skipN(genome, i);
-        substr.push_back(genome[i]);
+    for (uint8_t c = 0; c < 3 && i < d_source.size(); ++c, ++i) {
+        skipN(d_source, i);
+        substr.push_back(d_source[i]);
     }
 
     if (substr.size() != 3) {
       // if genome size not divisible by 3 than just add 'A' (zeros in encoded format) to the end
-      data.real_size = (cursor * 3) + substr.size();
+      data.real_size = (genome.size() * 3) + substr.size();
       for (uint8_t j = 0; j < (3 - substr.size()); ++j) {
         substr.push_back('A');
       }
     } else {
-      data.real_size = (cursor + 1) * 3;
+      data.real_size = (genome.size() + 1) * 3;
     }
 
-    encode_3_chars(substr, genome[cursor++], translate);
+    char encoded_char = encode_3_chars(substr);
+    genome.push_back(encoded_char);
   }
 
 
-  genome.resize(cursor);
+  genome.shrink_to_fit();
+
+  auto end = get_current_time_fenced();
+
+  std::cout << "Encoding time: " << to_us(end - begin) << "[ns]" << std::endl;
 
   return data;
 }
