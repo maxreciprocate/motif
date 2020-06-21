@@ -23,7 +23,12 @@ const std::array<uint8_t, 24> Lut = {
   0x0, 0x0, 0x0, 0x0, 0x4, 0x0, 0x0, 0x0,
 };
 
-void match(char* d_source, std::string& source, int8_t* d_output, int8_t* output, int64_t output_size);
+typedef struct {
+  std::string data;
+  size_t real_size;
+} encodedGenomeData;
+
+void match(char* d_source, encodedGenomeData& source, int8_t* d_output, int8_t* output, int64_t output_size);
 void setup(uint32_t*& d_table, std::vector<uint32_t>& table);
 void clear_table(uint32_t* d_table);
 
